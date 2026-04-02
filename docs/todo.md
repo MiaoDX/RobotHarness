@@ -43,11 +43,12 @@
 - 用 ManiSkill 的 `PickCube-v1` + `CPUGymWrapper` 测试
 - 写 `examples/maniskill_integration.py`
 
-### 6. Rerun 集成 — [#6](https://github.com/MiaoDX/RobotHarness/issues/6)
+### ~~6. Rerun 集成~~ ✅ — [#6](https://github.com/MiaoDX/RobotHarness/issues/6)
 
-- 在 capture 阶段同时写入 Rerun `.rrd` 文件
-- 利用 Rerun 的 Blueprint 定义标准化的调试布局
+- ~~在 capture 阶段同时写入 Rerun `.rrd` 文件~~
+- ~~利用 Rerun 的 Blueprint 定义标准化的调试布局~~
 - 可作为给 Rerun 社区提交的 example 来增加曝光
+- 已完成：`Harness(enable_rerun=True)` 会在每个 trial 下输出 `capture.rrd`，并设置默认 Blueprint 布局
 
 ## P2 — 项目工程化（提升专业度）
 
@@ -97,3 +98,4 @@
 | 2026-04-02 | 项目骨架：pyproject.toml, 核心模块, Gymnasium Wrapper, GraspTaskStore, 22 个测试, 文档英文化 |
 | 2026-04-02 | Demo GIF：两组抓取任务 front view GIF 嵌入 README（P0-1 ✅） |
 | 2026-04-02 | Issues 跟踪：将 TODO 项关联至 GitHub Issues #2-#12 |
+| 2026-04-02 | Rerun 集成：Capture 阶段支持 `.rrd` 录制 + 默认 Blueprint（P1-6 ✅） |

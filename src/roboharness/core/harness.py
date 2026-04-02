@@ -7,6 +7,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from roboharness.core.capture import CameraView, CaptureResult
 from roboharness.core.checkpoint import Checkpoint, CheckpointStore
+from roboharness.core.rerun_logger import RerunCaptureLogger
 
 
 @runtime_checkable
@@ -73,6 +74,8 @@ class Harness:
         backend: SimulatorBackend,
         output_dir: str | Path = "./harness_output",
         task_name: str = "default",
+        enable_rerun: bool = False,
+        rerun_app_id: str = "roboharness",
     ):
         self.backend = backend
         self.output_dir = Path(output_dir)
@@ -82,6 +85,7 @@ class Harness:
         self._step_count: int = 0
         self._trial_count: int = 0
         self._checkpoint_store = CheckpointStore(self.output_dir / "snapshots")
+        self._rerun_logger = RerunCaptureLogger(app_id=rerun_app_id) if enable_rerun else None
 
     # ---- Checkpoint management ----
 
@@ -110,6 +114,8 @@ class Harness:
         self._step_count = 0
         self._current_checkpoint_idx = 0
         self._trial_count += 1
+        if self._rerun_logger is not None:
+            self._rerun_logger.configure_trial(self._trial_dir(), self.task_name)
         return self.backend.reset()
 
     def step(self, action: Any) -> dict[str, Any]:
@@ -165,18 +171,24 @@ class Harness:
         state = self.backend.get_state()
         sim_time = self.backend.get_sim_time()
 
+        capture_meta = {"trial": self._trial_count, "task": self.task_name}
+        if self._rerun_logger is not None and self._rerun_logger.rrd_path is not None:
+            capture_meta["rerun_rrd"] = str(self._rerun_logger.rrd_path)
+
         result = CaptureResult(
             checkpoint_name=cp_name,
             step=self._step_count,
             sim_time=sim_time,
             views=views,
             state=state,
-            metadata={"trial": self._trial_count, "task": self.task_name},
+            metadata=capture_meta,
         )
 
         # Save to disk
         capture_dir = self._trial_dir() / cp_name
         result.save(capture_dir)
+        if self._rerun_logger is not None:
+            self._rerun_logger.log_capture(result)
 
         return result
 

@@ -38,6 +38,9 @@ pip install roboharness
 # With MuJoCo + Meshcat backend
 pip install roboharness[mujoco]
 
+# With Rerun logging (.rrd)
+pip install roboharness[rerun]
+
 # Development
 pip install roboharness[dev]
 ```
@@ -123,7 +126,12 @@ backend = MuJoCoMeshcatBackend(
     model_path="robot.xml",
     cameras=["front", "side", "top"],
 )
-harness = Harness(backend, output_dir="./harness_output", task_name="pick_and_place")
+harness = Harness(
+    backend,
+    output_dir="./harness_output",
+    task_name="pick_and_place",
+    enable_rerun=True,  # optional: also save capture.rrd per trial
+)
 
 harness.add_checkpoint("pre_grasp", cameras=["front", "side", "top"])
 harness.add_checkpoint("contact", cameras=["front", "wrist"])

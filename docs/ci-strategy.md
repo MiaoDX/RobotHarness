@@ -1,7 +1,31 @@
 # CI Strategy: CPU + GPU Testing
 
-> 讨论背景：随着 Roboharness 集成 cuRobo 规划、WBC 运控、Policy 推理等 GPU 依赖组件，
+> 讨论背景：随着 Roboharness 集成 WBC 运控、cuRobo 规划、Policy 推理等组件，
 > CI 需要从纯 CPU 扩展到 GPU 测试。本文档记录分层方案和平台选型。
+
+## 调研结论（2026-04-02）
+
+### GPU 需求分析
+
+| 组件 | GPU 是否必须 | 说明 |
+|------|-------------|------|
+| **GR00T Decoupled WBC — 上半身 IK** | **不需要** | 核心是 Pinocchio + Pink + qpsolvers，纯 CPU |
+| **GR00T Decoupled WBC — RL locomotion** | 可能需要 | TensorRT 需 GPU，但 ONNX Runtime CPU 推理或许够用 |
+| **GR00T SONIC 全身控制** | **必须** | TensorRT + CUDA，无 CPU 路径 |
+| **cuRobo 路径规划** | **必须** | 全部自定义 CUDA kernel，无 CPU fallback |
+| **CPU 替代（路径规划）** | N/A | VAMP（35μs 中位规划）、OMPL/MoveIt 均可替代 cuRobo |
+
+### 集成策略
+
+**不整包依赖 `decoupled_wbc`**（torch ~2.5GB、锁 Python 3.10、仓库 1+GB LFS），
+采用薄封装方案：只依赖 `pin` + `pin-pink` + `qpsolvers`（~200-300MB，支持 Python 3.10-3.12）。
+
+**GPU CI 时间线**：
+- Phase 1（WBC 上半身 IK）：不需要 GPU CI
+- Phase 2（RL locomotion）：视 ONNX Runtime CPU 表现决定
+- Phase 3（SONIC / cuRobo）：必须搭建 GPU CI
+
+详见 [#34](https://github.com/MiaoDX/roboharness/issues/34)。
 
 ## 当前状态
 

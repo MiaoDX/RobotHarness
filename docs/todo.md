@@ -24,6 +24,15 @@
 
 ## P1 — 生态集成（扩大用户覆盖面）
 
+### 13. GR00T WBC 分阶段接入 — [#34](https://github.com/MiaoDX/roboharness/issues/34)
+
+- **Phase 1（当前）**：Controller Protocol + 上半身 IK（Pinocchio + Pink，纯 CPU）
+  - 定义 `Controller` Protocol
+  - 实现 `WbcIkController` 薄封装（不依赖 GR00T 仓库，只用 `pin` + `pin-pink` + `qpsolvers`）
+  - 机器人浮在空中做抓取，不需要 GPU CI
+- **Phase 2**：+ RL Locomotion Policy（下半身腰部移动，可能需要 torch/onnxruntime）
+- **Phase 3**：SONIC 全身控制（必须 GPU）
+
 ### 4. Isaac Lab Gymnasium Wrapper 验证 — [#4](https://github.com/MiaoDX/RobotHarness/issues/4)
 
 - 用 Isaac Lab 的标准环境（如 `Isaac-Reach-Franka-v0`）测试 `RobotHarnessWrapper`

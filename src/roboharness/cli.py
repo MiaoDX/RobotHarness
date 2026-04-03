@@ -18,6 +18,7 @@ from roboharness.evaluate.batch import (
 )
 from roboharness.evaluate.constraints import load_constraints
 from roboharness.evaluate.defaults import GRASP_DEFAULTS
+from roboharness.storage.history import EvaluationHistory, detect_trend
 
 
 def _find_metadata_files(output_dir: Path) -> list[Path]:
@@ -240,6 +241,31 @@ def evaluate_command(
     return result.to_dict(), exit_code
 
 
+def trend_command(
+    output_dir: Path, window: int = 5, threshold: float = 0.1
+) -> list[dict[str, Any]]:
+    """Show success rate trends by comparing current report against history.
+
+    Generates a report (if needed), records it in eval_history.jsonl, and
+    compares against recent runs.  Returns a list of trend result dicts.
+    """
+    report = report_command(output_dir)
+    history = EvaluationHistory(output_dir)
+
+    trends: list[dict[str, Any]] = []
+    for task_name, task_data in report.get("tasks", {}).items():
+        rate = task_data.get("success_rate")
+        if rate is None:
+            continue
+        result = detect_trend(history, task_name, rate, window=window, threshold=threshold)
+        trends.append(result.to_dict())
+
+    # Record current run *after* trend detection so it doesn't compare against itself
+    history.record_from_report(report)
+
+    return trends
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -268,6 +294,34 @@ def main(argv: list[str] | None = None) -> int:
         "output_dir",
         type=Path,
         help="Path to harness output directory.",
+    )
+    report_parser.add_argument(
+        "--trend",
+        action="store_true",
+        help="Show success rate trends vs. recent history.",
+    )
+
+    # trend
+    trend_parser = subparsers.add_parser(
+        "trend",
+        help="Show success rate trends across evaluation runs.",
+    )
+    trend_parser.add_argument(
+        "output_dir",
+        type=Path,
+        help="Path to harness output directory.",
+    )
+    trend_parser.add_argument(
+        "--window",
+        type=int,
+        default=5,
+        help="Number of recent runs to compare against (default: 5).",
+    )
+    trend_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.1,
+        help="Minimum delta to flag as regression/improvement (default: 0.1).",
     )
 
     # evaluate
@@ -354,7 +408,39 @@ def main(argv: list[str] | None = None) -> int:
             rate = task_data.get("success_rate")
             rate_str = f"{rate:.0%}" if rate is not None else "N/A"
             print(f"  {task_name}: {total} trials, {captures} captures, success={rate_str}")
+
+        if args.trend:
+            trends = trend_command(args.output_dir)
+            if trends:
+                print("\nTrend analysis:")
+                for t in trends:
+                    print(f"  {t['message']}")
+            else:
+                print("\nNo trend data available (no tasks with results).")
         return 0
+
+    if args.command == "trend":
+        try:
+            trends = trend_command(
+                args.output_dir,
+                window=args.window,
+                threshold=args.threshold,
+            )
+        except FileNotFoundError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+        if not trends:
+            print("No trend data available (no tasks with results).")
+            return 0
+
+        has_regression = False
+        for t in trends:
+            print(t["message"])
+            if t["regressed"]:
+                has_regression = True
+
+        return 2 if has_regression else 0
 
     if args.command == "evaluate":
         try:

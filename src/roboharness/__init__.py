@@ -14,6 +14,7 @@ from roboharness.core.lifecycle import (
     default_registry,
 )
 from roboharness.runner import BatchResult, ParallelTrialRunner, TrialSpec
+from roboharness.storage.history import EvaluationHistory, EvaluationRecord, TrendResult
 
 __all__ = [
     "BatchResult",
@@ -23,10 +24,13 @@ __all__ = [
     "ComponentAssumption",
     "ComponentLifecycle",
     "Controller",
+    "EvaluationHistory",
+    "EvaluationRecord",
     "ExpirationHorizon",
     "Harness",
     "LifecycleRegistry",
     "ParallelTrialRunner",
+    "TrendResult",
     "TrialSpec",
     "default_registry",
 ]

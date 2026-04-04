@@ -78,6 +78,9 @@ Repository = "https://github.com/MiaoDX/RobotHarness"
 Issues = "https://github.com/MiaoDX/RobotHarness/issues"
 Documentation = "https://github.com/MiaoDX/RobotHarness/tree/main/docs"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/roboharness"]
 

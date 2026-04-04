@@ -13,9 +13,12 @@ from HuggingFace and wraps it with RobotHarnessWrapper to:
 The G1 model (29 body DOF + 14 hand DOF) is hosted at:
   huggingface.co/lerobot/unitree-g1-mujoco
 
-Run:
+Run (scripted inputs):
     pip install roboharness[lerobot] gymnasium Pillow
     MUJOCO_GL=osmesa python examples/lerobot_g1.py
+
+Run (GR00T RL balance policy — robot stays upright):
+    MUJOCO_GL=osmesa python examples/lerobot_g1.py --controller groot
 
 Output:
     ./harness_output/lerobot_g1/trial_001/
@@ -389,6 +392,12 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=640, help="Render width")
     parser.add_argument("--height", type=int, default=480, help="Render height")
     parser.add_argument(
+        "--controller",
+        choices=["scripted", "groot"],
+        default="scripted",
+        help="Controller: scripted (simple sinusoids) or groot (RL balance policy)",
+    )
+    parser.add_argument(
         "--assert-success", action="store_true", help="Exit non-zero on validation failure"
     )
     args = parser.parse_args()
@@ -421,8 +430,18 @@ def main() -> None:
     print(f"      Obs space: {env.observation_space.shape}")
     print(f"      Act space: {env.action_space.shape}")
 
-    # 2. Wrap with RobotHarnessWrapper
-    print("[2/5] Wrapping with RobotHarnessWrapper ...")
+    # 2. Load controller (if GR00T requested)
+    loco_controller = None
+    if args.controller == "groot":
+        from roboharness.controllers.locomotion import GrootLocomotionController
+
+        print("[2/6] Loading GR00T locomotion controller ...")
+        loco_controller = GrootLocomotionController()
+        print("      Balance + Walk ONNX policies loaded")
+
+    # 3. Wrap with RobotHarnessWrapper
+    step_label = "[3/6]" if loco_controller else "[2/5]"
+    print(f"{step_label} Wrapping with RobotHarnessWrapper ...")
     checkpoints = [
         {"name": "stand", "step": 300},
         {"name": "step", "step": 700},
@@ -438,30 +457,60 @@ def main() -> None:
     print(f"      Multi-camera detected: {wrapped.has_multi_camera}")
     print(f"      Camera capability: {wrapped.camera_capability}")
 
-    # 3. Run the motion sequence
-    print("[3/5] Running motion sequence ...")
+    # 4. Run simulation
+    run_label = "[4/6]" if loco_controller else "[3/5]"
+    controller_name = args.controller
+    print(f"{run_label} Running simulation (controller={controller_name}) ...")
     obs, info = wrapped.reset()
+    if loco_controller:
+        loco_controller.reset()
     print(f"      Initial obs shape: {obs.shape}, dtype: {obs.dtype}")
 
-    actions = (
-        build_stand_sequence(num_motors)
-        + build_step_sequence(num_motors)
-        + build_balance_sequence(num_motors)
-    )
+    n_steps = 1000
     checkpoint_infos: list[dict[str, Any]] = []
 
-    for i, action in enumerate(actions):
-        obs, reward, terminated, _truncated, info = wrapped.step(action)
+    if loco_controller:
+        # GR00T controller: compute actions from observations
+        for i in range(n_steps):
+            state = {"qpos": env._data.qpos, "qvel": env._data.qvel}
+            # Standing for first 300 steps, then walk forward, then stand again
+            if i < 300:
+                velocity = [0.0, 0.0, 0.0]
+            elif i < 700:
+                velocity = [0.3, 0.0, 0.0]
+            else:
+                velocity = [0.0, 0.0, 0.0]
+            lower_body = loco_controller.compute(command={"velocity": velocity}, state=state)
+            # Build full action: lower body from controller, arms at zero
+            action = np.zeros(num_motors)
+            action[: len(lower_body)] = lower_body
+            obs, reward, _terminated, _truncated, info = wrapped.step(action)
 
-        if "checkpoint" in info:
-            cp = info["checkpoint"]
-            checkpoint_infos.append(cp)
-            print(f"      Checkpoint '{cp['name']}' at step {cp['step']} | reward={reward:.3f}")
-            print(f"        -> {cp['capture_dir']}")
+            if "checkpoint" in info:
+                cp = info["checkpoint"]
+                checkpoint_infos.append(cp)
+                torso_z = env._get_torso_z()
+                print(
+                    f"      Checkpoint '{cp['name']}' at step {cp['step']}"
+                    f" | reward={reward:.3f}"
+                    f" | torso_z={torso_z:.3f}"
+                )
+                print(f"        -> {cp['capture_dir']}")
+    else:
+        # Scripted fallback
+        actions = (
+            build_stand_sequence(num_motors)
+            + build_step_sequence(num_motors)
+            + build_balance_sequence(num_motors)
+        )
+        for action in actions:
+            obs, reward, _terminated, _truncated, info = wrapped.step(action)
 
-        if terminated:
-            print(f"      Robot fell at step {i + 1}!")
-            break
+            if "checkpoint" in info:
+                cp = info["checkpoint"]
+                checkpoint_infos.append(cp)
+                print(f"      Checkpoint '{cp['name']}' at step {cp['step']} | reward={reward:.3f}")
+                print(f"        -> {cp['capture_dir']}")
 
     # 4. Validate
     print("[4/5] Validating integration ...")

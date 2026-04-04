@@ -53,6 +53,7 @@ wbc = [
 lerobot = [
     "mujoco>=3.0",
     "huggingface_hub>=0.20",
+    "onnxruntime>=1.16",
 ]
 dev = [
     "pytest>=7.0",
@@ -102,6 +103,7 @@ omit = [
     "src/roboharness/backends/mujoco_meshcat.py",   # requires mujoco
     "src/roboharness/backends/visualizer.py",        # requires mujoco / meshcat
     "src/roboharness/controllers/wbc_ik.py",         # requires pinocchio + pink
+    "src/roboharness/controllers/locomotion.py",     # requires onnxruntime + huggingface_hub
     "src/roboharness/wrappers/gymnasium_wrapper.py", # requires gymnasium
 ]
 
@@ -126,5 +128,7 @@ module = [
     "pink.*",
     "qpsolvers.*",
     "yaml.*",
+    "onnxruntime.*",
+    "huggingface_hub.*",
 ]
 ignore_missing_imports = true

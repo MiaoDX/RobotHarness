@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
 """LeRobot G1 Validation — RobotHarnessWrapper on a Unitree G1 MuJoCo simulation.
 
-Validates that RobotHarnessWrapper integrates correctly with a LeRobot-style
-Unitree G1 MuJoCo environment. Supports two modes:
+Validates that RobotHarnessWrapper integrates correctly with the Unitree G1
+humanoid robot in MuJoCo. Downloads the real 29-DOF G1 model (with hand DOFs)
+from HuggingFace and wraps it with RobotHarnessWrapper to:
 
-  --model simplified   Use an inline 12-DOF model (default, no extra deps)
-  --model huggingface  Download the real 29-DOF G1 from HuggingFace
+  1. Verify Gymnasium API compatibility (reset/step/render)
+  2. Capture multi-view screenshots at predefined checkpoints
+  3. Save state metadata in agent-consumable JSON format
+  4. Generate a self-contained HTML visual report
 
-The real G1 model (29 body DOF + 14 hand DOF) is hosted at:
+The G1 model (29 body DOF + 14 hand DOF) is hosted at:
   huggingface.co/lerobot/unitree-g1-mujoco
 
-Run (simplified):
-    pip install roboharness[mujoco] gymnasium Pillow
-    MUJOCO_GL=osmesa python examples/lerobot_g1.py
-
-Run (real model):
+Run:
     pip install roboharness[lerobot] gymnasium Pillow
-    MUJOCO_GL=osmesa python examples/lerobot_g1.py --model huggingface
+    MUJOCO_GL=osmesa python examples/lerobot_g1.py
 
 Output:
     ./harness_output/lerobot_g1/trial_001/
@@ -46,7 +45,7 @@ except ImportError:
 try:
     import mujoco
 except ImportError:
-    print("ERROR: mujoco is required. Install with: pip install roboharness[mujoco]")
+    print("ERROR: mujoco is required. Install with: pip install roboharness[lerobot]")
     sys.exit(1)
 
 from roboharness.wrappers import RobotHarnessWrapper
@@ -69,10 +68,7 @@ def download_g1_assets() -> Path:
     try:
         from huggingface_hub import snapshot_download
     except ImportError:
-        print(
-            "ERROR: huggingface_hub is required for the real G1 model.\n"
-            "Install with: pip install roboharness[lerobot]"
-        )
+        print("ERROR: huggingface_hub is required.\nInstall with: pip install roboharness[lerobot]")
         sys.exit(1)
 
     print(f"      Downloading {G1_HF_REPO} from HuggingFace ...")
@@ -86,99 +82,6 @@ def download_g1_assets() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Simplified G1 MJCF model (12-DOF bipedal humanoid with 3 cameras)
-# ---------------------------------------------------------------------------
-
-G1_SIMPLIFIED_MJCF = """\
-<mujoco model="unitree_g1_simplified">
-  <option gravity="0 0 -9.81" timestep="0.002"/>
-
-  <asset>
-    <texture type="skybox" builtin="gradient" rgb1="0.4 0.6 0.9" rgb2="0.1 0.15 0.3"
-             width="256" height="256"/>
-    <texture name="grid" type="2d" builtin="checker" rgb1="0.9 0.9 0.9" rgb2="0.7 0.7 0.7"
-             width="256" height="256"/>
-    <material name="grid_mat" texture="grid" texrepeat="8 8" reflectance="0.1"/>
-    <material name="body_mat" rgba="0.3 0.3 0.3 1"/>
-    <material name="joint_mat" rgba="0.2 0.5 0.8 1"/>
-    <material name="foot_mat" rgba="0.5 0.5 0.5 1"/>
-  </asset>
-
-  <worldbody>
-    <geom type="plane" size="3 3 0.01" material="grid_mat"/>
-    <light pos="0 0 3" dir="0 0 -1" diffuse="0.8 0.8 0.8"/>
-    <light pos="1 1 2" dir="-0.3 -0.3 -1" diffuse="0.4 0.4 0.4"/>
-
-    <camera name="front" pos="1.5 0 1.0" xyaxes="0 1 0 -0.3 0 1"/>
-    <camera name="side" pos="0 1.5 1.0" xyaxes="-1 0 0 0 -0.3 1"/>
-    <camera name="top" pos="0 0 3.0" xyaxes="1 0 0 0 1 0"/>
-
-    <body name="torso" pos="0 0 0.85">
-      <joint name="root_x" type="slide" axis="1 0 0" limited="false"/>
-      <joint name="root_z" type="slide" axis="0 0 1" range="-0.5 0.5" damping="10"/>
-      <geom type="capsule" fromto="0 0 -0.1 0 0 0.2" size="0.08" mass="10" material="body_mat"/>
-
-      <body name="head" pos="0 0 0.3">
-        <geom type="sphere" size="0.08" mass="1" material="joint_mat"/>
-      </body>
-
-      <body name="left_hip" pos="0 0.1 -0.1">
-        <joint name="left_hip_pitch" type="hinge" axis="0 1 0" range="-1.5 0.5" damping="5"/>
-        <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.04" mass="3" material="body_mat"/>
-        <body name="left_knee" pos="0 0 -0.3">
-          <joint name="left_knee" type="hinge" axis="0 1 0" range="0 2.5" damping="3"/>
-          <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.035" mass="2" material="body_mat"/>
-          <body name="left_ankle" pos="0 0 -0.3">
-            <joint name="left_ankle" type="hinge" axis="0 1 0" range="-0.8 0.8" damping="2"/>
-            <geom type="box" size="0.08 0.04 0.015" pos="0.02 0 -0.015" mass="0.5"
-                  material="foot_mat"/>
-          </body>
-        </body>
-      </body>
-
-      <body name="right_hip" pos="0 -0.1 -0.1">
-        <joint name="right_hip_pitch" type="hinge" axis="0 1 0" range="-1.5 0.5" damping="5"/>
-        <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.04" mass="3" material="body_mat"/>
-        <body name="right_knee" pos="0 0 -0.3">
-          <joint name="right_knee" type="hinge" axis="0 1 0" range="0 2.5" damping="3"/>
-          <geom type="capsule" fromto="0 0 0 0 0 -0.3" size="0.035" mass="2" material="body_mat"/>
-          <body name="right_ankle" pos="0 0 -0.3">
-            <joint name="right_ankle" type="hinge" axis="0 1 0" range="-0.8 0.8" damping="2"/>
-            <geom type="box" size="0.08 0.04 0.015" pos="0.02 0 -0.015" mass="0.5"
-                  material="foot_mat"/>
-          </body>
-        </body>
-      </body>
-
-      <body name="left_shoulder" pos="0 0.15 0.15">
-        <joint name="left_shoulder" type="hinge" axis="0 1 0" range="-3.14 1.0" damping="2"/>
-        <geom type="capsule" fromto="0 0 0 0 0.05 -0.25" size="0.03" mass="1.5"
-              material="joint_mat"/>
-      </body>
-
-      <body name="right_shoulder" pos="0 -0.15 0.15">
-        <joint name="right_shoulder" type="hinge" axis="0 1 0" range="-3.14 1.0" damping="2"/>
-        <geom type="capsule" fromto="0 0 0 0 -0.05 -0.25" size="0.03" mass="1.5"
-              material="joint_mat"/>
-      </body>
-    </body>
-  </worldbody>
-
-  <actuator>
-    <position name="left_hip_ctrl" joint="left_hip_pitch" kp="100" ctrlrange="-1.5 0.5"/>
-    <position name="left_knee_ctrl" joint="left_knee" kp="80" ctrlrange="0 2.5"/>
-    <position name="left_ankle_ctrl" joint="left_ankle" kp="40" ctrlrange="-0.8 0.8"/>
-    <position name="right_hip_ctrl" joint="right_hip_pitch" kp="100" ctrlrange="-1.5 0.5"/>
-    <position name="right_knee_ctrl" joint="right_knee" kp="80" ctrlrange="0 2.5"/>
-    <position name="right_ankle_ctrl" joint="right_ankle" kp="40" ctrlrange="-0.8 0.8"/>
-    <position name="left_shoulder_ctrl" joint="left_shoulder" kp="30" ctrlrange="-3.14 1.0"/>
-    <position name="right_shoulder_ctrl" joint="right_shoulder" kp="30" ctrlrange="-3.14 1.0"/>
-  </actuator>
-</mujoco>
-"""
-
-
-# ---------------------------------------------------------------------------
 # Gymnasium environment wrapping the G1 MuJoCo model
 # ---------------------------------------------------------------------------
 
@@ -186,24 +89,20 @@ G1_SIMPLIFIED_MJCF = """\
 class LeRobotG1Env(gym.Env):
     """Gymnasium environment for the Unitree G1 humanoid in MuJoCo.
 
-    Supports two loading modes:
-      - ``xml_string``: inline MJCF XML (simplified model, no external files)
-      - ``model_path``: path to a MuJoCo XML file (real G1 from HuggingFace)
-
-    For the real 43-DOF model (29 body + 14 hand), only the first
-    ``num_motors`` actuators are exposed in the action space. The remaining
-    (hand) actuators are held at zero.
+    Loads a MuJoCo XML model from ``model_path`` (the real G1 from HuggingFace).
+    For the 43-DOF model (29 body + 14 hand), only the first ``num_motors``
+    actuators are exposed in the action space. The remaining (hand) actuators
+    are held at zero.
     """
 
     metadata: ClassVar[dict[str, Any]] = {"render_modes": ["rgb_array"], "render_fps": 50}
 
     def __init__(
         self,
+        model_path: str | Path,
         render_mode: str = "rgb_array",
         render_width: int = 640,
         render_height: int = 480,
-        xml_string: str | None = None,
-        model_path: str | Path | None = None,
         num_motors: int | None = None,
     ):
         super().__init__()
@@ -212,10 +111,7 @@ class LeRobotG1Env(gym.Env):
         self._render_height = render_height
 
         # Load MuJoCo model
-        if model_path is not None:
-            self._model = mujoco.MjModel.from_xml_path(str(model_path))
-        else:
-            self._model = mujoco.MjModel.from_xml_string(xml_string or G1_SIMPLIFIED_MJCF)
+        self._model = mujoco.MjModel.from_xml_path(str(model_path))
         self._data = mujoco.MjData(self._model)
         self._renderer = mujoco.Renderer(self._model, self._render_height, self._render_width)
 
@@ -240,10 +136,7 @@ class LeRobotG1Env(gym.Env):
         )
 
         # Available cameras (from MJCF)
-        self._cameras = []
-        for i in range(self._model.ncam):
-            self._cameras.append(self._model.camera(i).name)
-
+        self._cameras = [self._model.camera(i).name for i in range(self._model.ncam)]
         self._step_count = 0
 
     def reset(
@@ -256,34 +149,26 @@ class LeRobotG1Env(gym.Env):
         return self._get_obs(), {}
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
-        # Apply action to the first num_motors actuators, leave rest at zero
         self._data.ctrl[:] = 0.0
         self._data.ctrl[: self._num_motors] = action
         mujoco.mj_step(self._model, self._data)
         self._step_count += 1
 
         obs = self._get_obs()
-
-        # Reward: stay upright (torso z-height) + alive bonus
         torso_z = self._get_torso_z()
         reward = 1.0 + torso_z
-
-        # Terminated if torso falls too low
         terminated = bool(torso_z < 0.3)
-        truncated = False
 
         info: dict[str, Any] = {
             "torso_z": float(torso_z),
             "sim_time": float(self._data.time),
         }
-
-        return obs, reward, terminated, truncated, info
+        return obs, reward, terminated, False, info
 
     def render(self) -> np.ndarray:
         """Render the first available camera."""
         if self._cameras:
             return self.render_camera(self._cameras[0])
-        # Fallback: free camera
         self._renderer.update_scene(self._data)
         return self._renderer.render()
 
@@ -299,14 +184,10 @@ class LeRobotG1Env(gym.Env):
         return np.concatenate([self._data.qpos.copy(), self._data.qvel.copy()])
 
     def _get_torso_z(self) -> float:
-        """Get torso height. Handles both simplified (slide joint) and real (free joint) models."""
-        # For a free joint, qpos[0:3] = (x, y, z), so z = qpos[2]
-        # For the simplified model, root_z is qpos[1]
-        # Detect by checking if the first joint is free
+        """Get torso height (free joint: qpos[2])."""
         if self._model.njnt > 0 and self._model.jnt_type[0] == mujoco.mjtJoint.mjJNT_FREE:
             return float(self._data.qpos[2])
-        # Simplified model: root_z is second joint
-        return float(self._data.qpos[1]) + 0.85  # offset to absolute height
+        return float(self._data.qpos[0])
 
     @property
     def cameras(self) -> list[str]:
@@ -318,7 +199,7 @@ class LeRobotG1Env(gym.Env):
 
 
 # ---------------------------------------------------------------------------
-# Scripted motion sequences (work with any actuator count)
+# Scripted motion sequences
 # ---------------------------------------------------------------------------
 
 
@@ -334,7 +215,6 @@ def build_step_sequence(num_motors: int, n_steps: int = 400) -> list[np.ndarray]
     for i in range(n_steps):
         action = np.zeros(num_motors)
         phase = (i / n_steps) * 2 * np.pi
-        # Alternate legs with sinusoidal motion
         for j in range(n_legs):
             sign = 1.0 if j < n_legs // 2 else -1.0
             action[j] = sign * 0.2 * np.sin(phase + (j % (n_legs // 2)) * 0.5)
@@ -352,7 +232,7 @@ def build_balance_sequence(num_motors: int, n_steps: int = 300) -> list[np.ndarr
 # ---------------------------------------------------------------------------
 
 
-def generate_html_report(output_dir: Path, model_name: str) -> Path:
+def generate_html_report(output_dir: Path) -> Path:
     """Generate a self-contained HTML report with embedded checkpoint images."""
     trial_dir = output_dir / "lerobot_g1" / "trial_001"
     if not trial_dir.exists():
@@ -366,7 +246,6 @@ def generate_html_report(output_dir: Path, model_name: str) -> Path:
     rows_html = []
     for cp_dir in checkpoints:
         cp_name = cp_dir.name
-
         meta_path = cp_dir / "metadata.json"
         meta = {}
         if meta_path.exists():
@@ -421,14 +300,13 @@ def generate_html_report(output_dir: Path, model_name: str) -> Path:
 <body>
 <h1>LeRobot G1 Validation Report</h1>
 <div class="summary">
-  <strong>Model:</strong> {model_name}
+  <strong>Model:</strong> Unitree G1 29-DOF ({G1_HF_REPO})
   <br/><strong>Wrapper:</strong> Multi-camera via render_camera() detected
   <br/><strong>Status:</strong> Validation {status}
 </div>
 {"".join(rows_html)}
 <div class="footer">
   Generated by <code>examples/lerobot_g1.py --report</code>
-  <br/>Full G1 model (29-DOF): huggingface.co/lerobot/unitree-g1-mujoco
 </div>
 </body>
 </html>
@@ -444,7 +322,6 @@ def generate_html_report(output_dir: Path, model_name: str) -> Path:
 
 
 def validate_integration(
-    output_dir: Path,
     env: LeRobotG1Env,
     checkpoint_infos: list[dict[str, Any]],
     expected_cameras: list[str],
@@ -508,12 +385,6 @@ def main() -> None:
     parser.add_argument("--width", type=int, default=640, help="Render width")
     parser.add_argument("--height", type=int, default=480, help="Render height")
     parser.add_argument(
-        "--model",
-        choices=["simplified", "huggingface"],
-        default="simplified",
-        help="Model to use: simplified (inline 12-DOF) or huggingface (real 29-DOF)",
-    )
-    parser.add_argument(
         "--assert-success", action="store_true", help="Exit non-zero on validation failure"
     )
     args = parser.parse_args()
@@ -524,31 +395,22 @@ def main() -> None:
     print("  Roboharness: LeRobot G1 Validation")
     print("=" * 60)
 
-    # 1. Create the G1 environment
-    print(f"\n[1/5] Creating LeRobot G1 MuJoCo environment (model={args.model}) ...")
-    if args.model == "huggingface":
-        repo_path = download_g1_assets()
-        xml_path = repo_path / G1_SCENE_XML
-        env = LeRobotG1Env(
-            render_mode="rgb_array",
-            render_width=args.width,
-            render_height=args.height,
-            model_path=xml_path,
-            num_motors=G1_NUM_BODY_MOTORS,
-        )
-        model_name = f"Unitree G1 29-DOF (from {G1_HF_REPO})"
-    else:
-        env = LeRobotG1Env(
-            render_mode="rgb_array",
-            render_width=args.width,
-            render_height=args.height,
-        )
-        model_name = "Unitree G1 simplified (12-DOF inline)"
+    # 1. Download and load the G1 model
+    print("\n[1/5] Downloading G1 model from HuggingFace ...")
+    repo_path = download_g1_assets()
+    xml_path = repo_path / G1_SCENE_XML
+
+    env = LeRobotG1Env(
+        model_path=xml_path,
+        render_mode="rgb_array",
+        render_width=args.width,
+        render_height=args.height,
+        num_motors=G1_NUM_BODY_MOTORS,
+    )
 
     cameras = env.cameras
     num_motors = env._num_motors
 
-    print(f"      Model: {model_name}")
     print(f"      nq={env._model.nq}, nv={env._model.nv}, nu={env._model.nu}")
     print(f"      Controlled motors: {num_motors}")
     print(f"      Cameras: {cameras}")
@@ -599,7 +461,7 @@ def main() -> None:
 
     # 4. Validate
     print("[4/5] Validating integration ...")
-    failures = validate_integration(output_dir, env, checkpoint_infos, cameras)
+    failures = validate_integration(env, checkpoint_infos, cameras)
 
     if failures:
         print("      VALIDATION FAILED:")
@@ -615,7 +477,7 @@ def main() -> None:
     print(f"      {total_images} images saved to: {trial_dir}")
 
     if args.report:
-        report_path = generate_html_report(output_dir, model_name)
+        report_path = generate_html_report(output_dir)
         print(f"      HTML report: {report_path}")
 
     print("\n  Output structure:")
@@ -628,7 +490,6 @@ def main() -> None:
                     print(f"      {fname}")
 
     print("\n" + "=" * 60)
-
     wrapped.close()
 
     if args.assert_success and failures:

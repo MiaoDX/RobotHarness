@@ -13,10 +13,13 @@ from roboharness.core.lifecycle import (
     LifecycleRegistry,
     default_registry,
 )
+from roboharness.evaluate.assertions import AssertionEngine, MetricAssertion
+from roboharness.evaluate.result import EvaluationResult, Operator, Severity, Verdict
 from roboharness.runner import BatchResult, ParallelTrialRunner, TrialSpec
 from roboharness.storage.history import EvaluationHistory, EvaluationRecord, TrendResult
 
 __all__ = [
+    "AssertionEngine",
     "BatchResult",
     "CaptureResult",
     "Checkpoint",
@@ -26,11 +29,16 @@ __all__ = [
     "Controller",
     "EvaluationHistory",
     "EvaluationRecord",
+    "EvaluationResult",
     "ExpirationHorizon",
     "Harness",
     "LifecycleRegistry",
+    "MetricAssertion",
+    "Operator",
     "ParallelTrialRunner",
+    "Severity",
     "TrendResult",
     "TrialSpec",
+    "Verdict",
     "default_registry",
 ]

@@ -1,0 +1,12 @@
+.git
+.github
+__pycache__
+*.pyc
+*.egg-info
+dist
+build
+harness_output
+_site
+.mypy_cache
+.pytest_cache
+.ruff_cache

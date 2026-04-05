@@ -17,23 +17,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/miaodx/roboharness/ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
 
-      - name: Install system dependencies (OSMesa for headless rendering)
-        run: sudo apt-get update && sudo apt-get install -y libosmesa6-dev
-
-      - name: Install package with demo + WBC dependencies
-        run: pip install -e ".[demo,wbc]"
-
-      - name: Cache HuggingFace model assets
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/huggingface/hub/models--lerobot--unitree-g1-mujoco
-          key: hf-lerobot-g1-mujoco-v1
+      - name: Install package (editable, deps already cached)
+        run: uv pip install --system -e ".[demo,wbc]"
 
       - name: Run MuJoCo grasp example
         env:
@@ -49,12 +42,6 @@ jobs:
         env:
           MUJOCO_GL: osmesa
         run: python examples/lerobot_g1.py --report --output-dir ./harness_output
-
-      - name: Install CPU-only PyTorch for native LeRobot
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: Install lerobot
-        run: pip install lerobot
 
       - name: Run native LeRobot G1 example
         env:

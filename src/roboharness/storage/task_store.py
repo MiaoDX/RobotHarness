@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
+from roboharness._utils import save_json as _write_json
+
 
 @dataclass
 class TrialResult:
@@ -101,7 +103,7 @@ class TaskStore:
     def save_task_config(self, config: dict[str, Any]) -> Path:
         """Save task-level configuration."""
         path = self.base_dir / "task_config.json"
-        _write_json(path, config)
+        _write_json(config, path)
         return path
 
     def save_trial_result(self, variant_name: str, result: TrialResult) -> Path:
@@ -109,7 +111,6 @@ class TaskStore:
         trial_dir = self.get_trial_dir(variant_name, result.trial_id)
         path = trial_dir / "result.json"
         _write_json(
-            path,
             {
                 "trial_id": result.trial_id,
                 "success": result.success,
@@ -119,19 +120,20 @@ class TaskStore:
                 "checkpoints_reached": result.checkpoints_reached,
                 "timestamp": time.time(),
             },
+            path,
         )
         return path
 
     def save_variant_summary(self, variant_name: str, summary: dict[str, Any]) -> Path:
         """Save summary for a variant (e.g., best trial, success rate)."""
         path = self.get_variant_dir(variant_name) / "summary.json"
-        _write_json(path, summary)
+        _write_json(summary, path)
         return path
 
     def save_report(self, report: dict[str, Any]) -> Path:
         """Save overall task report."""
         path = self.base_dir / "report.json"
-        _write_json(path, report)
+        _write_json(report, path)
         return path
 
     def list_variants(self) -> list[str]:
@@ -182,7 +184,7 @@ class GraspTaskStore(TaskStore):
             **extra,
         }
         path = variant_dir / "position.json"
-        _write_json(path, position_data)
+        _write_json(position_data, path)
         return variant_dir
 
     def get_grasp_checkpoint_dir(
@@ -212,8 +214,3 @@ class GraspTaskStore(TaskStore):
 
         self.save_report(report)
         return report
-
-
-def _write_json(path: Path, data: dict[str, Any]) -> None:
-    with path.open("w") as f:
-        json.dump(data, f, indent=2, default=str)

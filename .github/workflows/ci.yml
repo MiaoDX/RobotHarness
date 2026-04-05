@@ -111,8 +111,6 @@ jobs:
 
   lerobot-g1-native-example:
     runs-on: ubuntu-latest
-    # Native LeRobot requires torch + lerobot — heavy install, allowed to fail
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

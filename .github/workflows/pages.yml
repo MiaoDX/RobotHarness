@@ -29,6 +29,15 @@ jobs:
       - name: Install package with all backends
         run: pip install -e ".[mujoco,meshcat,wbc]" robot_descriptions Pillow
 
+      - name: Cache HuggingFace model assets
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub/models--lerobot--unitree-g1-mujoco
+          key: hf-lerobot-g1-mujoco-v1
+
+      - name: Install LeRobot dependencies
+        run: pip install -e ".[lerobot]" gymnasium
+
       - name: Run MuJoCo grasp example
         env:
           MUJOCO_GL: osmesa
@@ -38,6 +47,11 @@ jobs:
         env:
           MUJOCO_GL: osmesa
         run: python examples/g1_wbc_reach.py --report --output-dir ./harness_output
+
+      - name: Run LeRobot G1 locomotion example
+        env:
+          MUJOCO_GL: osmesa
+        run: python examples/lerobot_g1.py --report --output-dir ./harness_output
 
       - name: Build Pages site
         run: |
@@ -69,6 +83,17 @@ jobs:
             cp "${cp_dir}"state.json "_site/g1-reach/${cp_name}/" 2>/dev/null || true
           done
 
+          # --- Demo 3: LeRobot G1 Locomotion ---
+          mkdir -p _site/g1-loco
+          cp harness_output/lerobot_g1_report.html _site/g1-loco/index.html 2>/dev/null || true
+          for cp_dir in harness_output/lerobot_g1/trial_001/*/; do
+            cp_name=$(basename "$cp_dir")
+            mkdir -p "_site/g1-loco/${cp_name}"
+            cp "${cp_dir}"*_rgb.png "_site/g1-loco/${cp_name}/" 2>/dev/null || true
+            cp "${cp_dir}"metadata.json "_site/g1-loco/${cp_name}/" 2>/dev/null || true
+            cp "${cp_dir}"state.json "_site/g1-loco/${cp_name}/" 2>/dev/null || true
+          done
+
           # --- Landing page ---
           cat > _site/index.html << 'LANDING'
           <!DOCTYPE html>
@@ -77,46 +102,75 @@ jobs:
           <meta charset="utf-8"/>
           <title>Roboharness Visual Reports</title>
           <style>
-            body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 0 auto;
-                   padding: 40px 20px; background: #f5f5f5; }
-            h1 { color: #333; border-bottom: 2px solid #4a90d9; padding-bottom: 10px; }
-            .demos { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 30px; }
+            body { font-family: -apple-system, sans-serif; max-width: 960px; margin: 0 auto;
+                   padding: 40px 20px; background: #f5f5f5; color: #333; }
+            h1 { border-bottom: 2px solid #4a90d9; padding-bottom: 10px; }
+            .subtitle { color: #666; margin-top: -10px; margin-bottom: 30px; }
+            .demos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+                     gap: 20px; }
             .demo-card { background: white; border-radius: 12px; padding: 24px;
-                         box-shadow: 0 2px 8px rgba(0,0,0,0.1); flex: 1; min-width: 300px;
-                         text-decoration: none; color: inherit; transition: transform 0.2s; }
-            .demo-card:hover { transform: translateY(-4px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
-            .demo-card h2 { color: #4a90d9; margin-top: 0; }
-            .demo-card.g1 h2 { color: #d94a4a; }
+                         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                         text-decoration: none; color: inherit; transition: transform 0.2s;
+                         border-left: 4px solid #4a90d9; }
+            .demo-card:hover { transform: translateY(-3px);
+                               box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+            .demo-card.humanoid { border-left-color: #d94a4a; }
+            .demo-card.loco { border-left-color: #2d8cf0; }
+            .demo-card h2 { margin-top: 0; font-size: 18px; }
+            .demo-card p { font-size: 14px; line-height: 1.5; margin-bottom: 8px; }
+            .demo-card .meta { color: #888; font-size: 12px; }
             .tag { display: inline-block; padding: 2px 8px; border-radius: 4px;
-                   font-size: 12px; font-weight: 600; margin-right: 6px; }
+                   font-size: 11px; font-weight: 600; margin-right: 4px; margin-bottom: 4px; }
             .tag-cpu { background: #e8f5e9; color: #2e7d32; }
             .tag-ik { background: #e3f2fd; color: #1565c0; }
             .tag-humanoid { background: #fce4ec; color: #c62828; }
             .tag-3d { background: #fff3e0; color: #e65100; }
-            .footer { margin-top: 40px; color: #999; font-size: 12px; }
+            .tag-rl { background: #ede7f6; color: #4527a0; }
+            .tag-loco { background: #e0f7fa; color: #00695c; }
+            .footer { margin-top: 40px; color: #999; font-size: 12px; text-align: center; }
           </style>
           </head>
           <body>
           <h1>Roboharness: Visual Reports</h1>
-          <p>Automated visual checkpoint captures from robot simulation demos.</p>
+          <p class="subtitle">Auto-generated from CI on every push to <code>main</code>.
+          Each demo runs headless in GitHub Actions and produces visual checkpoint captures.</p>
           <div class="demos">
             <a class="demo-card" href="grasp/">
-              <h2>Simple Grasp</h2>
-              <p><span class="tag tag-cpu">CPU</span><span class="tag tag-3d">Meshcat 3D</span>
-              Scripted 2-finger gripper grasping a cube.
-              Multi-view captures at 4 checkpoints with interactive 3D scenes.</p>
-              <p style="color:#888; font-size:13px;">MuJoCo inline model &middot; 3 cameras &middot; position control</p>
+              <h2>MuJoCo Grasp</h2>
+              <div>
+                <span class="tag tag-cpu">CPU</span>
+                <span class="tag tag-3d">Meshcat 3D</span>
+              </div>
+              <p>Scripted 2-finger gripper grasping a cube. Multi-view captures at
+              4 checkpoints with interactive 3D scenes.</p>
+              <div class="meta">MuJoCo inline model &middot; 3 cameras &middot; position control</div>
             </a>
-            <a class="demo-card g1" href="g1-reach/">
-              <h2>G1 Humanoid WBC Reach</h2>
-              <p><span class="tag tag-humanoid">Humanoid</span><span class="tag tag-ik">IK</span><span class="tag tag-cpu">CPU</span>
-              Unitree G1 reaching targets using differential IK (Pinocchio + Pink).
-              Controller Protocol demo with 4 checkpoints.</p>
-              <p style="color:#888; font-size:13px;">MuJoCo Menagerie &middot; 4 cameras &middot; WbcIkController</p>
+            <a class="demo-card humanoid" href="g1-reach/">
+              <h2>G1 WBC Reach</h2>
+              <div>
+                <span class="tag tag-humanoid">Humanoid</span>
+                <span class="tag tag-ik">Diff-IK</span>
+                <span class="tag tag-cpu">CPU</span>
+              </div>
+              <p>Unitree G1 reaching targets with whole-body control. Pinocchio + Pink
+              differential-IK keeps balance while both arms reach 3D targets.</p>
+              <div class="meta">MuJoCo Menagerie &middot; 4 cameras &middot; WbcIkController</div>
+            </a>
+            <a class="demo-card loco" href="g1-loco/">
+              <h2>G1 Locomotion</h2>
+              <div>
+                <span class="tag tag-humanoid">Humanoid</span>
+                <span class="tag tag-rl">GR00T RL</span>
+                <span class="tag tag-loco">Walk</span>
+              </div>
+              <p>G1 stand &rarr; walk &rarr; stop using GR00T ONNX locomotion policies.
+              Real 29-DOF model from HuggingFace with multi-camera captures.</p>
+              <div class="meta">LeRobot HF model &middot; multi-camera &middot; GrootLocomotionController</div>
             </a>
           </div>
           <div class="footer">
-            Generated by <a href="https://github.com/MiaoDX/roboharness">Roboharness</a> CI/CD pipeline.
+            Generated by <a href="https://github.com/MiaoDX/roboharness">Roboharness</a> CI/CD pipeline
+            &middot; <a href="https://github.com/MiaoDX/roboharness/actions/workflows/pages.yml">Build logs</a>
           </div>
           </body>
           </html>

@@ -22,7 +22,20 @@
   <img src="assets/architecture.svg" width="800" alt="Roboharness Architecture"/>
 </p>
 
+### **[View Interactive Visual Reports →](https://miaodx.com/roboharness/)**
+
+*Auto-generated from CI on every push to main — MuJoCo grasp, G1 WBC reach, G1 locomotion.*
+
 </div>
+
+## Demos
+
+| Demo | Description | Report | Run |
+|:-----|:------------|:------:|:----|
+| **[MuJoCo Grasp](#mujoco-grasp)** | Scripted grasp with Meshcat 3D, multi-view captures | [Live](https://miaodx.com/roboharness/grasp/) | `python examples/mujoco_grasp.py --report` |
+| **[G1 WBC Reach](#g1-humanoid-wbc-reach)** | Whole-body IK reaching (Pinocchio + Pink) | [Live](https://miaodx.com/roboharness/g1-reach/) | `python examples/g1_wbc_reach.py --report` |
+| **[G1 Locomotion](#lerobot-g1-locomotion)** | GR00T RL stand→walk→stop, HuggingFace model | [Live](https://miaodx.com/roboharness/g1-loco/) | `python examples/lerobot_g1.py --report` |
+| **[G1 Native LeRobot](#native-lerobot-integration)** | Official `make_env()` factory + DDS-ready | — | `python examples/lerobot_g1_native.py` |
 
 ## Installation
 
@@ -36,21 +49,20 @@ pip install roboharness[all]             # everything (MuJoCo, WBC, LeRobot, Rer
 
 ## Quick Start
 
-### MuJoCo Grasp Example
+### MuJoCo Grasp
 
 ```bash
 pip install roboharness[mujoco] Pillow
 python examples/mujoco_grasp.py --report
 ```
 
-> **[View the interactive visual report online](https://miaodx.com/roboharness/)** — auto-generated from CI on every push to main.
-
 | pre_grasp | contact | grasp | lift |
 |:-:|:-:|:-:|:-:|
 | ![pre_grasp](assets/example_mujoco_grasp/pre_grasp_front.png) | ![contact](assets/example_mujoco_grasp/contact_front.png) | ![grasp](assets/example_mujoco_grasp/grasp_front.png) | ![lift](assets/example_mujoco_grasp/lift_front.png) |
 | Gripper above cube | Lowered onto cube | Fingers closed | Cube lifted |
 
-### G1 Humanoid WBC Reach
+<details>
+<summary><b>G1 Humanoid WBC Reach</b></summary>
 
 ```bash
 pip install roboharness[mujoco,wbc] robot_descriptions Pillow
@@ -63,14 +75,34 @@ Whole-body control (WBC) for the Unitree G1 humanoid using Pinocchio + Pink diff
 |:-:|:-:|:-:|:-:|
 | ![stand](assets/example_g1_wbc_reach/stand_front.png) | ![reach_left](assets/example_g1_wbc_reach/reach_left_front.png) | ![reach_both](assets/example_g1_wbc_reach/reach_both_front.png) | ![retract](assets/example_g1_wbc_reach/retract_front.png) |
 
-### LeRobot G1 Locomotion
+</details>
+
+<details>
+<summary><b>LeRobot G1 Locomotion</b></summary>
 
 ```bash
-pip install roboharness[lerobot] robot_descriptions Pillow
+pip install roboharness[lerobot] gymnasium Pillow
 python examples/lerobot_g1.py --report
 ```
 
 Integrates the real [Unitree G1 43-DOF model](https://huggingface.co/lerobot/unitree-g1-mujoco) from HuggingFace with GR00T WBC locomotion policies (Balance + Walk). The example downloads the model and ONNX policies automatically, runs the G1 through stand → walk → stop phases, and captures multi-camera checkpoints via `RobotHarnessWrapper`.
+
+</details>
+
+<details>
+<summary><b>Native LeRobot Integration</b></summary>
+
+```bash
+# CPU-only (lighter):
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install roboharness[lerobot-native] Pillow
+
+MUJOCO_GL=osmesa python examples/lerobot_g1_native.py --report
+```
+
+Uses LeRobot's official `make_env("lerobot/unitree-g1-mujoco")` factory for standardized env creation. DDS-ready for sim-to-real transfer when hardware is available. See [#83](https://github.com/MiaoDX/roboharness/issues/83) for details.
+
+</details>
 
 ### Gymnasium Wrapper (Zero-Change Integration)
 
@@ -113,6 +145,7 @@ result = harness.run_to_next_checkpoint(actions)
 |-----------|--------|-------------|
 | MuJoCo + Meshcat | ✅ Implemented | Native backend adapter |
 | LeRobot (G1 MuJoCo) | ✅ Implemented | Gymnasium Wrapper + Controllers |
+| LeRobot Native (`make_env`) | ✅ Implemented | `make_env()` + VectorEnvAdapter |
 | Isaac Lab | 🚧 Planned | Gymnasium Wrapper |
 | ManiSkill | 🚧 Planned | Gymnasium Wrapper |
 | LocoMuJoCo / MuJoCo Playground / unitree_rl_gym | 📋 Roadmap | Various |

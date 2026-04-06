@@ -1,0 +1,19 @@
+{
+  "name": "agentic-hackathon",
+  "version": "1.0.0",
+  "description": "Agentic Coding Hackathon 2026 CLI",
+  "bin": {
+    "agentic-hackathon": "./agentic-hackathon"
+  },
+  "preferGlobal": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "agentic-hackathon",
+    "hackathon-ai-cli.js",
+    "README.md",
+    "SKILL.md"
+  ],
+  "license": "UNLICENSED"
+}

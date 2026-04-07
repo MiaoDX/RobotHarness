@@ -53,6 +53,16 @@ When reviewing a PR (as an agent or on behalf of one), **push fixes directly to 
 
 Do NOT create a new branch or a new PR for review fixes.
 
+## CI failure investigation
+
+When a CI check fails, **always read the actual logs/error messages** before diagnosing. Do not stop at the status summary (`conclusion: failure`). Specifically:
+
+1. Use `get_check_runs` to identify which checks failed.
+2. For each failed check, visit its `html_url` (via WebFetch or browser) to read the full error output. External checks (Cirun, Codecov, etc.) often have critical details only visible on their detail pages.
+3. Only after reading the actual error messages, diagnose and fix.
+
+Skipping step 2 leads to guessing — which wastes time and misses the real issue.
+
 ## Gotchas
 
 - `RobotHarnessWrapper` must handle both numpy arrays AND PyTorch tensors for obs/rewards (Isaac Lab compatibility). Use duck typing (`hasattr(x, "item")`) instead of `isinstance` checks for tensor types.

@@ -643,4 +643,9 @@ function toggleAuto(){
   else{timer=setInterval(next,5000);b.textContent='⏸ 暂停';b.classList.add('on')}
 }
 document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')next();if(e.key==='ArrowLeft')prev()});
-let tx=0;document.addEven
+let tx=0;document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX},{passive:true});
+document.addEventListener('touchend',e=>{const d=e.changedTouches[0].clientX-tx;if(d<-50)next();if(d>50)prev()},{passive:true});
+show(1);
+</script>
+</body>
+</html>

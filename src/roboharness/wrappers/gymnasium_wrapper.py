@@ -348,11 +348,15 @@ class RobotHarnessWrapper(Wrapper):  # type: ignore[type-arg]
 
 
 def _to_float(value: Any) -> float:
-    """Convert a scalar value to float, handling torch tensors and numpy types."""
+    """Convert a scalar value to float, handling tensor/array reward values."""
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, np.number):
         return float(value)
+    if isinstance(value, np.ndarray):
+        if value.size == 0:
+            return 0.0
+        return float(value.mean())
     # Handle torch tensors and similar array-like objects
     if hasattr(value, "item"):
         # Multi-element tensors (e.g. vectorized envs): take the mean

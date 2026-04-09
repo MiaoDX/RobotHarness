@@ -145,6 +145,8 @@ def test_wrapper_checkpoint_with_torch_reward(tmp_path):
     state = json.loads(state_path.read_text())
     assert state["checkpoint"] == "cp1"
     assert state["step"] == 3
+    # Mock returns reward=0.5 per env; verify it's serialized correctly
+    assert state["reward"] == pytest.approx(0.5, abs=1e-5)
 
 
 def test_wrapper_with_dict_observations(tmp_path):
@@ -212,6 +214,8 @@ def test_wrapper_render_capture_saved(tmp_path):
     assert capture_dir.exists()
     assert (capture_dir / "state.json").exists()
     assert (capture_dir / "metadata.json").exists()
+    assert (capture_dir / "default_rgb.png").exists()
+    assert info["checkpoint"]["files"]["default_rgb"].endswith("default_rgb.png")
 
 
 # ---------------------------------------------------------------------------
@@ -392,3 +396,94 @@ def test_single_camera_fallback_still_works(tmp_path):
     meta = json.loads((capture_dir / "metadata.json").read_text())
     assert meta["cameras"] == ["default"]
     assert meta["camera_capability"] == "none"
+
+
+# ---------------------------------------------------------------------------
+# Protocol-based configuration tests
+# ---------------------------------------------------------------------------
+
+
+def test_protocol_based_isaac_lab_wrapper(tmp_path):
+    """Wrapper with TaskProtocol should capture at phase steps (mirrors the example)."""
+    from roboharness.core.protocol import TaskPhase, TaskProtocol
+
+    env = MockIsaacLabEnv(num_envs=1)
+    protocol = TaskProtocol(
+        name="isaac_reach",
+        description="Isaac Lab reach task",
+        phases=[
+            TaskPhase("start", "Initial configuration"),
+            TaskPhase("mid", "Midpoint of episode"),
+        ],
+    )
+    wrapped = RobotHarnessWrapper(
+        env,
+        protocol=protocol,
+        phase_steps={"start": 1, "mid": 5},
+        output_dir=tmp_path,
+        task_name="proto_isaac",
+    )
+    assert wrapped.active_protocol is protocol
+    assert wrapped.active_protocol.name == "isaac_reach"
+
+    wrapped.reset()
+    for i in range(5):
+        _obs, _reward, _terminated, _truncated, info = wrapped.step(
+            torch.zeros(1, *env.action_space.shape)
+        )
+        if i == 0:  # step 1 → "start"
+            assert "checkpoint" in info
+            assert info["checkpoint"]["name"] == "start"
+        elif i == 4:  # step 5 → "mid"
+            assert "checkpoint" in info
+            assert info["checkpoint"]["name"] == "mid"
+        else:
+            assert "checkpoint" not in info
+
+    # Verify both checkpoint directories were created
+    assert (tmp_path / "proto_isaac" / "trial_001" / "start" / "state.json").exists()
+    assert (tmp_path / "proto_isaac" / "trial_001" / "mid" / "state.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# Helper function tests with CPU torch tensors
+# ---------------------------------------------------------------------------
+
+
+def test_to_float_with_cpu_torch_scalar():
+    """_to_float should extract float from a CPU scalar tensor."""
+    from roboharness.wrappers.gymnasium_wrapper import _to_float
+
+    t = torch.tensor(0.5)
+    assert _to_float(t) == pytest.approx(0.5, abs=1e-5)
+
+
+def test_to_float_with_cpu_torch_vector():
+    """_to_float should return mean for multi-element CPU tensors."""
+    from roboharness.wrappers.gymnasium_wrapper import _to_float
+
+    t = torch.tensor([1.0, 2.0, 3.0])
+    assert _to_float(t) == pytest.approx(2.0, abs=1e-5)
+
+
+def test_to_numpy_rgb_with_float_tensor():
+    """_to_numpy_rgb should scale [0,1] float tensors to uint8."""
+    from roboharness.wrappers.gymnasium_wrapper import _to_numpy_rgb
+
+    t = torch.ones(4, 4, 3) * 0.5
+    result = _to_numpy_rgb(t)
+    assert isinstance(result, np.ndarray)
+    assert result.dtype == np.uint8
+    # 0.5 * 255 = 127.5 → 127 or 128 depending on rounding
+    assert result[0, 0, 0] in (127, 128)
+
+
+def test_to_numpy_rgb_with_uint8_tensor():
+    """_to_numpy_rgb should pass through uint8 tensors as-is."""
+    from roboharness.wrappers.gymnasium_wrapper import _to_numpy_rgb
+
+    t = torch.full((4, 4, 3), 200, dtype=torch.uint8)
+    result = _to_numpy_rgb(t)
+    assert isinstance(result, np.ndarray)
+    assert result.dtype == np.uint8
+    assert result[0, 0, 0] == 200

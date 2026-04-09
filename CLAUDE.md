@@ -72,7 +72,7 @@ Skipping step 2 leads to guessing — which wastes time and misses the real issu
 
 ## Tools & environment
 
-- IMPORTANT: GitHub MCP tools are available (prefixed `mcp__github__`). Use them for all GitHub interactions (issues, PRs, comments). Do NOT assume `gh` CLI is available.
+- IMPORTANT: GitHub MCP tools are available (prefixed `mcp__github__`). Use them for all GitHub interactions (issues, PRs, comments). Do NOT use `gh` CLI — in cloud environments it cannot be authorized. If an MCP tool call fails due to temporary unavailability, wait ~2 minutes and retry.
 - Pre-commit hooks are configured (`.pre-commit-config.yaml`). Run `pre-commit install` to enable, or run `ruff check . && ruff format --check .` manually.
 - Optional deps: `[demo]` (all example dependencies), `[dev]` (testing/linting tools).
 

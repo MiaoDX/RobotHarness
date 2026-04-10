@@ -1,5 +1,6 @@
 .PHONY: lint format typecheck test check-all check-gpu \
-       demo-grasp demo-sonic demo-g1 demo-g1-native demo-wbc demos
+       demo-grasp demo-sonic demo-g1 demo-g1-native demo-wbc demos \
+       init-showcase
 
 # --- Development (CPU, works in web sessions) ---
 
@@ -51,3 +52,9 @@ demo-wbc:
 
 demos: demo-grasp demo-wbc demo-g1 demo-sonic
 	@echo "All demos complete. Check output directories for reports."
+
+# --- Showcase repo generation ---
+
+init-showcase:
+	python scripts/init-showcase-repo.py ./showcase-output --force
+	@echo "\nShowcase repo generated in ./showcase-output/"

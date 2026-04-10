@@ -61,13 +61,14 @@ Checkpoints save to `harness_output/<task>/trial_001/<checkpoint>/`:
 
 ## MCP server (optional)
 
-When roboharness runs as a tool service alongside other MCP tools, three tools are exposed:
+When roboharness runs as a tool service alongside other MCP tools, four tools are exposed:
 
 | Tool | Purpose |
 |------|---------|
-| `capture_checkpoint` | Pause simulation, capture multi-view screenshots + state |
+| `capture_checkpoint` | Pause simulation, capture multi-view screenshots + state (optional base64 images) |
 | `evaluate_constraints` | Run constraint evaluator on a report, return verdict |
 | `compare_baselines` | Compare current success rate against evaluation history |
+| `evaluate_batch_trials` | Evaluate all trials in a directory, return aggregate pass/fail with success rate |
 
 ```bash
 pip install mcp                        # additional dependency
@@ -84,10 +85,12 @@ server.run()                           # blocks, listens on stdio
 
 ### Tool parameters
 
-**`capture_checkpoint`** — `checkpoint_name` (string, optional), `cameras` (list of strings, default `["front"]`).
+**`capture_checkpoint`** — `checkpoint_name` (string, optional), `cameras` (list of strings, default `["front"]`), `include_images` (boolean, default false — when true, each view includes an `rgb_base64` field with a base64-encoded PNG screenshot).
 
 **`evaluate_constraints`** — `report` (object with `summary_metrics` / `snapshot_metrics`), `assertions` (list of `{metric, operator, threshold}` dicts; operators: `lt`, `le`, `eq`, `gt`, `ge`, `in_range`).
 
 **`compare_baselines`** — `task` (string), `current_rate` (float 0–1), `window` (int, default 5), `threshold` (float, default 0.1).
+
+**`evaluate_batch_trials`** — `results_dir` (string, path to directory with `autonomous_report.json` files), `assertions` (optional list of assertion dicts — uses grasp defaults when omitted), `min_success_rate` (optional float 0–1 — when set, result includes `ci_passed` boolean).
 
 Business logic lives in `roboharness.mcp.tools.HarnessTools` and can be called directly without the MCP SDK.

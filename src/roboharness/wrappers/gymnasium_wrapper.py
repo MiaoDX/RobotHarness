@@ -108,8 +108,9 @@ def _capture_frame_from_env(
         if capability == MultiCameraCapability.RENDER_CAMERA:
             # Try env first, then unwrapped
             for target in (env, getattr(env, "unwrapped", None)):
-                if target is not None and callable(getattr(target, "render_camera", None)):
-                    frame = target.render_camera(camera_name)
+                render_fn = getattr(target, "render_camera", None)
+                if target is not None and callable(render_fn):
+                    frame = render_fn(camera_name)
                     return _to_numpy_rgb(frame)
 
         if capability == MultiCameraCapability.ISAAC_TILED:
@@ -286,14 +287,15 @@ class RobotHarnessWrapper(Wrapper):  # type: ignore[type-arg]
         """Step environment. Captures screenshots at checkpoint steps."""
         obs, reward, terminated, truncated, info = self.env.step(action)
         self._step_count += 1
+        reward_f = _to_float(reward)
 
         # Check if we hit a checkpoint
         if self._step_count in self._checkpoints:
             cp_name = self._checkpoints[self._step_count]
-            capture_info = self._capture_checkpoint(cp_name, obs, reward, info)
+            capture_info = self._capture_checkpoint(cp_name, obs, reward_f, info)
             info["checkpoint"] = capture_info
 
-        return obs, reward, terminated, truncated, info
+        return obs, reward_f, terminated, truncated, info
 
     @property
     def active_protocol(self) -> TaskProtocol | None:

@@ -259,7 +259,9 @@ class GrootLocomotionController:
         self._action[:] = output[0].flatten()[:NUM_LOWER_BODY_JOINTS]
 
         # Decode action → joint position targets
-        target = GROOT_DEFAULT_ANGLES[:NUM_LOWER_BODY_JOINTS] + self._action * ACTION_SCALE
+        target: np.ndarray = (
+            GROOT_DEFAULT_ANGLES[:NUM_LOWER_BODY_JOINTS] + self._action * ACTION_SCALE
+        )
         return target
 
     def reset(self) -> None:
@@ -390,7 +392,7 @@ class HolosomaLocomotionController:
         self._action[:] = output[0].flatten()[:NUM_BODY_JOINTS]
 
         # Decode action → joint position targets
-        target = HOLOSOMA_DEFAULT_ANGLES + self._action * HOLOSOMA_ACTION_SCALE
+        target: np.ndarray = HOLOSOMA_DEFAULT_ANGLES + self._action * HOLOSOMA_ACTION_SCALE
         return target
 
     def reset(self) -> None:

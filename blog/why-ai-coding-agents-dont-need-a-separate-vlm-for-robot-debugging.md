@@ -42,7 +42,7 @@ In [Roboharness](https://github.com/MiaoDX/roboharness), we built a visual testi
 ```python
 from roboharness import Harness
 
-harness = Harness(backend, output_dir="./output", task_name="grasp")
+harness = Harness(backend, output_dir="./harness_output", task_name="grasp")
 cameras = ["front", "side", "top"]
 harness.add_checkpoint("pre_grasp", cameras=cameras, trigger_step=500)
 harness.add_checkpoint("approach", cameras=cameras, trigger_step=1000)
@@ -140,7 +140,9 @@ But for the **iterative debugging loop** — where a coding agent is developing,
 Roboharness is open source and designed to work with any simulator that implements a simple protocol interface:
 
 ```bash
-pip install roboharness[demo]
+git clone https://github.com/MiaoDX/roboharness.git
+cd roboharness
+pip install -e ".[demo]"
 python examples/mujoco_grasp.py --report
 ```
 

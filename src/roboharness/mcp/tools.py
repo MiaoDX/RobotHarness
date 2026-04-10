@@ -10,6 +10,8 @@ pure business logic.  The thin MCP server wrapper lives in ``server.py``.
 
 from __future__ import annotations
 
+import base64
+import io
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +21,9 @@ from roboharness.core.capture import CameraView, CaptureResult
 from roboharness.core.checkpoint import Checkpoint
 from roboharness.core.harness import Harness
 from roboharness.evaluate.assertions import AssertionEngine
+from roboharness.evaluate.batch import evaluate_batch
 from roboharness.evaluate.constraints import _parse_assertion
+from roboharness.evaluate.defaults import GRASP_DEFAULTS
 from roboharness.storage.history import EvaluationHistory
 
 # JSON-schema descriptions exposed by the MCP server layer.
@@ -41,6 +45,15 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "type": "array",
                     "items": {"type": "string"},
                     "description": 'Camera names to capture (default: ["front"]).',
+                },
+                "include_images": {
+                    "type": "boolean",
+                    "description": (
+                        "Include base64-encoded PNG screenshots in the response "
+                        "(default: false). When true, each view includes an "
+                        "'rgb_base64' field with the PNG data."
+                    ),
+                    "default": False,
                 },
             },
         },
@@ -112,15 +125,85 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "required": ["task", "current_rate"],
         },
     },
+    {
+        "name": "evaluate_batch_trials",
+        "description": (
+            "Evaluate all trial reports in a directory against metric "
+            "assertions and return aggregate pass/fail results with "
+            "success rate, verdict counts, and per-constraint failure details."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "results_dir": {
+                    "type": "string",
+                    "description": (
+                        "Path to a directory containing autonomous_report.json "
+                        "files (searched recursively)."
+                    ),
+                },
+                "assertions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "metric": {"type": "string"},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["lt", "le", "eq", "gt", "ge", "in_range"],
+                            },
+                            "threshold": {},
+                            "severity": {
+                                "type": "string",
+                                "enum": ["critical", "major", "minor", "info"],
+                                "default": "major",
+                            },
+                            "phase": {"type": "string", "default": "*"},
+                        },
+                        "required": ["metric", "operator", "threshold"],
+                    },
+                    "description": (
+                        "Metric assertions to evaluate. If omitted, uses "
+                        "built-in grasp defaults (grip_center_error_mm, "
+                        "pinch_gap_error_mm, etc.)."
+                    ),
+                },
+                "min_success_rate": {
+                    "type": "number",
+                    "description": (
+                        "Optional minimum success rate threshold (0.0-1.0). "
+                        "When set, the result includes a 'ci_passed' boolean."
+                    ),
+                },
+            },
+            "required": ["results_dir"],
+        },
+    },
 ]
 
 
-def _camera_view_to_dict(view: CameraView) -> dict[str, Any]:
+def _encode_rgb_base64(rgb: np.ndarray) -> str:
+    """Encode an RGB numpy array as a base64 PNG string."""
+    from PIL import Image
+
+    img = Image.fromarray(rgb)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def _camera_view_to_dict(
+    view: CameraView,
+    *,
+    include_image: bool = False,
+) -> dict[str, Any]:
     """Serialise a CameraView to a JSON-friendly dict."""
     result: dict[str, Any] = {
         "name": view.name,
         "rgb_shape": list(view.rgb.shape),
     }
+    if include_image:
+        result["rgb_base64"] = _encode_rgb_base64(view.rgb)
     if view.depth is not None:
         result["depth_shape"] = list(view.depth.shape)
     if view.segmentation is not None:
@@ -128,7 +211,11 @@ def _camera_view_to_dict(view: CameraView) -> dict[str, Any]:
     return result
 
 
-def _capture_to_dict(capture: CaptureResult) -> dict[str, Any]:
+def _capture_to_dict(
+    capture: CaptureResult,
+    *,
+    include_images: bool = False,
+) -> dict[str, Any]:
     """Serialise a CaptureResult to a JSON-friendly dict."""
     state = {}
     for k, v in capture.state.items():
@@ -141,7 +228,7 @@ def _capture_to_dict(capture: CaptureResult) -> dict[str, Any]:
         "checkpoint_name": capture.checkpoint_name,
         "step": capture.step,
         "sim_time": capture.sim_time,
-        "views": [_camera_view_to_dict(v) for v in capture.views],
+        "views": [_camera_view_to_dict(v, include_image=include_images) for v in capture.views],
         "state": state,
         "metadata": capture.metadata,
     }
@@ -174,18 +261,20 @@ class HarnessTools:
         self,
         checkpoint_name: str | None = None,
         cameras: list[str] | None = None,
+        include_images: bool = False,
     ) -> dict[str, Any]:
         """Capture multi-view screenshots and simulation state.
 
         Returns a JSON-serialisable dict describing the captured views,
-        simulation state, and metadata.
+        simulation state, and metadata.  When *include_images* is ``True``,
+        each view includes an ``rgb_base64`` field with a base64-encoded PNG.
         """
         checkpoint = Checkpoint(
             name=checkpoint_name or f"step_{self._harness.step_count}",
             cameras=cameras or ["front"],
         )
         capture = self._harness.capture(checkpoint)
-        return _capture_to_dict(capture)
+        return _capture_to_dict(capture, include_images=include_images)
 
     # ---- Tool: evaluate_constraints --------------------------------------
 
@@ -230,3 +319,37 @@ class HarnessTools:
             threshold=threshold,
         )
         return trend.to_dict()
+
+    # ---- Tool: evaluate_batch_trials -------------------------------------
+
+    def evaluate_batch_trials(
+        self,
+        results_dir: str,
+        assertions: list[dict[str, Any]] | None = None,
+        min_success_rate: float | None = None,
+    ) -> dict[str, Any]:
+        """Evaluate all trial reports in a directory and return aggregate results.
+
+        Parameters
+        ----------
+        results_dir:
+            Path to a directory containing ``autonomous_report.json`` files.
+        assertions:
+            Optional list of assertion dicts.  When ``None``, the built-in
+            ``GRASP_DEFAULTS`` preset is used.
+        min_success_rate:
+            Optional CI threshold.  When set, the result includes a
+            ``ci_passed`` boolean indicating whether the success rate
+            meets the threshold.
+        """
+        parsed = (
+            [_parse_assertion(a) for a in assertions]
+            if assertions is not None
+            else list(GRASP_DEFAULTS)
+        )
+        batch = evaluate_batch(Path(results_dir), parsed)
+        result = batch.to_dict()
+        if min_success_rate is not None:
+            result["ci_passed"] = batch.success_rate >= min_success_rate
+            result["min_success_rate"] = min_success_rate
+        return result

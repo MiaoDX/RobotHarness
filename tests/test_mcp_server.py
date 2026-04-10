@@ -132,15 +132,20 @@ def test_create_server_registers_both_handlers(server):
 # ── list_tools ──────────────────────────────────────────────────────────
 
 
-def test_list_tools_returns_three_tools(server):
+def test_list_tools_returns_four_tools(server):
     tools = _run(server._list_handler())
-    assert len(tools) == 3
+    assert len(tools) == 4
 
 
 def test_list_tools_has_expected_names(server):
     tools = _run(server._list_handler())
     names = {t.name for t in tools}
-    assert names == {"capture_checkpoint", "evaluate_constraints", "compare_baselines"}
+    assert names == {
+        "capture_checkpoint",
+        "evaluate_constraints",
+        "compare_baselines",
+        "evaluate_batch_trials",
+    }
 
 
 def test_list_tools_each_has_description_and_schema(server):
@@ -187,6 +192,20 @@ def test_call_compare_baselines_no_history(server):
     payload = json.loads(result[0].text)
     assert payload["regressed"] is False
     assert payload["previous_rate"] is None
+
+
+def test_call_evaluate_batch_trials_empty(server, tmp_path):
+    empty_dir = tmp_path / "empty_trials"
+    empty_dir.mkdir()
+    result = _run(
+        server._call_handler(
+            "evaluate_batch_trials",
+            {"results_dir": str(empty_dir)},
+        )
+    )
+    payload = json.loads(result[0].text)
+    assert payload["total_trials"] == 0
+    assert payload["success_rate"] == 0.0
 
 
 def test_call_unknown_tool_returns_error(server):

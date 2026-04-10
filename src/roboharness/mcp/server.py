@@ -49,6 +49,7 @@ def create_server(
         "capture_checkpoint": tools.capture_checkpoint,
         "evaluate_constraints": tools.evaluate_constraints,
         "compare_baselines": tools.compare_baselines,
+        "evaluate_batch_trials": tools.evaluate_batch_trials,
     }
 
     @server.list_tools()

@@ -25,3 +25,105 @@ abstract: >-
   autonomously. It provides checkpoint capture, multi-view rendering,
   and constraint evaluation for robot simulation environments including
   MuJoCo, Isaac Lab, ManiSkill, and LeRobot.
+references:
+  - type: article
+    title: "Demonstration-Free Robotic Control via LLM Agents"
+    abbreviation: "FAEA"
+    authors:
+      - family-names: Tsui
+        given-names: "Brian Y."
+      - family-names: Fang
+        given-names: "Alan Y."
+      - family-names: Hwu
+        given-names: "Tiffany J."
+    year: 2026
+    url: "https://arxiv.org/abs/2601.20334"
+    notes: >-
+      LLM agents for robotic manipulation without demonstrations or fine-tuning;
+      validates the code-as-policy paradigm that roboharness is designed to support.
+  - type: article
+    title: "CaP-X: A Framework for Benchmarking and Improving Coding Agents for Robot Manipulation"
+    abbreviation: "CaP-X"
+    authors:
+      - family-names: Fu
+        given-names: Max
+      - family-names: Yu
+        given-names: Justin
+      - family-names: El-Refai
+        given-names: Karim
+      - family-names: Kou
+        given-names: Ethan
+      - family-names: Xue
+        given-names: Haoru
+      - family-names: Huang
+        given-names: Huang
+      - family-names: Xiao
+        given-names: Wenli
+      - family-names: Wang
+        given-names: Guanzhi
+      - family-names: Li
+        given-names: "Fei-Fei"
+      - family-names: Shi
+        given-names: Guanya
+      - family-names: Wu
+        given-names: Jiajun
+      - family-names: Sastry
+        given-names: Shankar
+      - family-names: Zhu
+        given-names: Yuke
+      - family-names: Goldberg
+        given-names: Ken
+      - family-names: Fan
+        given-names: "Linxi Jim"
+    year: 2026
+    url: "https://arxiv.org/abs/2603.22435"
+    notes: >-
+      Benchmark framework showing that multi-turn visual feedback substantially
+      improves code-based robot control — the same feedback loop roboharness enables.
+  - type: article
+    title: "Score the Steps, Not Just the Goal: VLM-Based Subgoal Evaluation for Robotic Manipulation"
+    abbreviation: "StepEval"
+    authors:
+      - family-names: ElMallah
+        given-names: Ramy
+      - family-names: Chhajer
+        given-names: Krish
+      - family-names: Lee
+        given-names: "Chi-Guhn"
+    year: 2025
+    url: "https://arxiv.org/abs/2509.19524"
+    notes: >-
+      VLM-based per-subgoal evaluation for robot manipulation; complements
+      roboharness checkpoint captures with automated visual scoring.
+  - type: article
+    title: "SOLE-R1: Video-Language Reasoning as the Sole Reward for On-Robot Reinforcement Learning"
+    abbreviation: "SOLE-R1"
+    authors:
+      - family-names: Schroeder
+        given-names: Philip
+      - family-names: Weng
+        given-names: Thomas
+      - family-names: Schmeckpeper
+        given-names: Karl
+      - family-names: Rosen
+        given-names: Eric
+      - family-names: Hart
+        given-names: Stephen
+      - family-names: Biza
+        given-names: Ondrej
+    year: 2026
+    url: "https://arxiv.org/abs/2603.28730"
+    notes: >-
+      Video-language model as the sole reward for on-robot RL; related to
+      roboharness's goal of enabling VLM-based evaluation from checkpoint screenshots.
+  - type: article
+    title: "Act-Observe-Rewrite: Multimodal Coding Agents as In-Context Policy Learners for Robot Manipulation"
+    abbreviation: "AOR"
+    authors:
+      - family-names: Kumar
+        given-names: Vaishak
+    year: 2026
+    url: "https://arxiv.org/abs/2603.04466"
+    notes: >-
+      Multimodal coding agents that iteratively rewrite control code from visual
+      observations — most directly related to roboharness's capture-judge-iterate loop.

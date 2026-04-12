@@ -53,6 +53,25 @@ When reviewing a PR (as an agent or on behalf of one), **push fixes directly to 
 
 Do NOT create a new branch or a new PR for review fixes.
 
+### Release process
+
+Releases are cut by pushing to the `release` branch, which triggers `.github/workflows/release.yml` to tag, create a GitHub Release, and publish to PyPI via OIDC trusted publishing.
+
+**Important:** The `release` branch has **unrelated git history** (no common ancestor with `main`). It exists only as a deploy pointer. GitHub UI cannot merge unrelated histories, so **never open a PR targeting `release`**. Use this flow:
+
+1. Bump the version in **both** `pyproject.toml` and `src/roboharness/__init__.py` on a feature branch (e.g. `claude/release-<slug>`). Use semver — minor bump for feature milestones, patch for fix-only rollups.
+2. Open a PR targeting **`main`** (never `release`). Write release notes in the PR description summarizing what landed since the last tag.
+3. After CI is green and the PR is merged into `main`, force-push `release` to `main`'s tip:
+   ```bash
+   git fetch origin main
+   git push origin +origin/main:release   # or: git push --force origin main:release
+   ```
+   This is a force-push by design — `release` is a deploy pointer, not a history-preserving branch. Requires explicit user authorization each time.
+4. The push triggers the workflow: reads version from `pyproject.toml`, tags `vX.Y.Z`, generates release notes (`gh release create --generate-notes`), builds, publishes to PyPI.
+5. Verify the GitHub Release, the `vX.Y.Z` tag, and the PyPI artifact before closing out.
+
+If a duplicate PR targeting `release` was auto-created on push, close it — the `main`-targeted PR is the canonical one.
+
 ## CI failure investigation
 
 When a CI check fails, **always read the actual logs/error messages** before diagnosing. Do not stop at the status summary (`conclusion: failure`). Specifically:

@@ -24,7 +24,7 @@
 
 ### **[View Interactive Visual Reports →](https://miaodx.com/roboharness/)**
 
-*Auto-generated from CI on every push to main — MuJoCo grasp, G1 WBC reach, G1 locomotion, G1 native LeRobot, SONIC.*
+*Auto-generated from CI on every push to main — MuJoCo grasp, G1 WBC reach, G1 locomotion, native LeRobot G1 (GR00T + SONIC), and SONIC.*
 
 </div>
 
@@ -35,7 +35,8 @@
 | **[MuJoCo Grasp](#mujoco-grasp)** | Scripted grasp with Meshcat 3D, multi-view captures | [Live](https://miaodx.com/roboharness/grasp/) | `python examples/mujoco_grasp.py --report` |
 | **[G1 WBC Reach](#g1-humanoid-wbc-reach)** | Whole-body IK reaching (Pinocchio + Pink) | [Live](https://miaodx.com/roboharness/g1-reach/) | `python examples/g1_wbc_reach.py --report` |
 | **[G1 Locomotion](#lerobot-g1-locomotion)** | GR00T RL stand→walk→stop, HuggingFace model | [Live](https://miaodx.com/roboharness/g1-loco/) | `python examples/lerobot_g1.py --report` |
-| **[G1 Native LeRobot](#native-lerobot-integration)** | Official `make_env()` factory + DDS-ready | [Live](https://miaodx.com/roboharness/g1-native/) | `python examples/lerobot_g1_native.py` |
+| **[G1 Native LeRobot (GR00T)](#native-lerobot-integration)** | Official `make_env()` factory + GR00T Balance + Walk | [Live](https://miaodx.com/roboharness/g1-native-groot/) | `python examples/lerobot_g1_native.py --controller groot --report` |
+| **[G1 Native LeRobot (SONIC)](#native-lerobot-integration)** | Official `make_env()` factory + SONIC planner | [Live](https://miaodx.com/roboharness/g1-native-sonic/) | `python examples/lerobot_g1_native.py --controller sonic --report` |
 | **[SONIC Motion Tracking](#sonic-locomotion)** | Encoder+decoder pipeline, motion replay from MoCap | [Live](https://miaodx.com/roboharness/sonic/) | Controller API (see below) |
 
 ## Installation
@@ -96,10 +97,11 @@ Integrates the real [Unitree G1 43-DOF model](https://huggingface.co/lerobot/uni
 pip install torch --index-url https://download.pytorch.org/whl/cpu  # CPU-only
 pip install roboharness[demo] lerobot
 
-MUJOCO_GL=osmesa python examples/lerobot_g1_native.py --report
+MUJOCO_GL=osmesa python examples/lerobot_g1_native.py --controller groot --report
+MUJOCO_GL=osmesa python examples/lerobot_g1_native.py --controller sonic --report
 ```
 
-Uses LeRobot's official `make_env("lerobot/unitree-g1-mujoco")` factory for standardized env creation. DDS-ready for sim-to-real transfer when hardware is available. See [#83](https://github.com/MiaoDX/roboharness/issues/83) for details.
+Uses LeRobot's official `make_env("lerobot/unitree-g1-mujoco")` factory for standardized env creation. The published native demo reports are split by controller: one report for GR00T and one for SONIC. DDS-ready for sim-to-real transfer when hardware is available. See [#83](https://github.com/MiaoDX/roboharness/issues/83) for details.
 
 </details>
 

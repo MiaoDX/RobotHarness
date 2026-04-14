@@ -51,18 +51,22 @@ class BatchResult:
 
     @property
     def total_trials(self) -> int:
+        """Total number of trials executed."""
         return len(self.results)
 
     @property
     def successful_trials(self) -> int:
+        """Number of trials that completed with success=True."""
         return sum(1 for r in self.results if r.success)
 
     @property
     def failed_trials(self) -> int:
+        """Number of trials that completed with success=False."""
         return self.total_trials - self.successful_trials
 
     @property
     def success_rate(self) -> float:
+        """Fraction of successful trials (0.0 if no trials)."""
         if self.total_trials == 0:
             return 0.0
         return self.successful_trials / self.total_trials

@@ -98,22 +98,26 @@ class LeRobotEvalReport:
 
     @property
     def n_episodes(self) -> int:
+        """Number of evaluated episodes."""
         return len(self.episodes)
 
     @property
     def success_rate(self) -> float:
+        """Fraction of episodes that succeeded (0.0 if no episodes)."""
         if not self.episodes:
             return 0.0
         return sum(1 for ep in self.episodes if ep.success) / len(self.episodes)
 
     @property
     def mean_reward(self) -> float:
+        """Mean cumulative reward across all episodes (0.0 if no episodes)."""
         if not self.episodes:
             return 0.0
         return sum(ep.total_reward for ep in self.episodes) / len(self.episodes)
 
     @property
     def mean_episode_length(self) -> float:
+        """Mean number of steps per episode (0.0 if no episodes)."""
         if not self.episodes:
             return 0.0
         return sum(ep.episode_length for ep in self.episodes) / len(self.episodes)

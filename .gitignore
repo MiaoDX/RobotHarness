@@ -38,3 +38,5 @@ MUJOCO_LOG.TXT
 # OS
 .DS_Store
 Thumbs.db
+.gstack/
+tmp

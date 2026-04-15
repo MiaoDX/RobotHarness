@@ -222,7 +222,7 @@ result = harness.run_to_next_checkpoint(actions)
 - **SimulatorBackend protocol** — implement a few methods, plug in any simulator
 - **Agent-consumable output** — PNG + JSON files that any coding agent can read
 
-See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md), [docs/development-workflow.md](docs/development-workflow.md), and [docs/context.en.md](docs/context.en.md) for architecture, contributor workflow, and project background.
+See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), [docs/development-workflow.md](docs/development-workflow.md), and [docs/context.en.md](docs/context.en.md) for architecture, contributor workflow, release notes, and project background.
 
 ## Related Work
 

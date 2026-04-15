@@ -32,7 +32,7 @@
 
 | Demo | Description | Report | Run |
 |:-----|:------------|:------:|:----|
-| **[MuJoCo Grasp](#mujoco-grasp)** | Scripted grasp with Meshcat 3D, multi-view captures | [Live](https://miaodx.com/roboharness/grasp/) | `python examples/mujoco_grasp.py --report` |
+| **[MuJoCo Grasp](#mujoco-grasp)** | Scripted grasp with Meshcat 3D, multi-view captures, paired baseline proof | [Live](https://miaodx.com/roboharness/grasp/) | `python examples/mujoco_grasp.py --report` |
 | **[G1 WBC Reach](#g1-humanoid-wbc-reach)** | Whole-body IK reaching (Pinocchio + Pink) | [Live](https://miaodx.com/roboharness/g1-reach/) | `python examples/g1_wbc_reach.py --report` |
 | **[G1 Locomotion](#lerobot-g1-locomotion)** | GR00T RL stand→walk→stop, HuggingFace model | [Live](https://miaodx.com/roboharness/g1-loco/) | `python examples/lerobot_g1.py --report` |
 | **[G1 Native LeRobot (GR00T)](#native-lerobot-integration)** | Official `make_env()` factory + GR00T Balance + Walk | [Live](https://miaodx.com/roboharness/g1-native-groot/) | `python examples/lerobot_g1_native.py --controller groot --report` |
@@ -57,6 +57,16 @@ pip install roboharness[dev]             # development + SONIC real-model test d
 pip install roboharness[demo]
 python examples/mujoco_grasp.py --report
 ```
+
+For headless Linux or CI, prefix the command with `MUJOCO_GL=osmesa`.
+
+This example now produces a report artifact pack that is meant to be actionable without replay:
+- `report.html` opens with an alarm-first summary and a `Current vs Baseline` section for the first failing phase.
+- `autonomous_report.json` stays the canonical verdict and metric-delta contract.
+- `phase_manifest.json` tells the agent which phase failed, which views to inspect, and where to rerun from.
+- `alarms.json` captures evaluator-backed failures in machine-readable form.
+
+The first screen should answer three questions fast: what failed first, what does the current frame look like next to baseline, and what rerun target should I use next. Success runs render an explicit `PASS/no failed phase` state. Missing or ambiguous evidence says what is broken and how to recover.
 
 | pre_grasp | contact | grasp | lift |
 |:-:|:-:|:-:|:-:|
@@ -212,7 +222,7 @@ result = harness.run_to_next_checkpoint(actions)
 - **SimulatorBackend protocol** — implement a few methods, plug in any simulator
 - **Agent-consumable output** — PNG + JSON files that any coding agent can read
 
-See [docs/context.en.md](docs/context.en.md) for full background and motivation.
+See [ARCHITECTURE.md](ARCHITECTURE.md), [CONTRIBUTING.md](CONTRIBUTING.md), [docs/development-workflow.md](docs/development-workflow.md), and [docs/context.en.md](docs/context.en.md) for architecture, contributor workflow, and project background.
 
 ## Related Work
 

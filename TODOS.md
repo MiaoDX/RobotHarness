@@ -34,21 +34,14 @@ This file captures deferred work from approved planning and review artifacts.
 - Depends on / blocked by: Phase 2 evidence cards shipping first and proving useful
   enough to justify a richer interaction.
 
-## 3. Sync README and docs to the new evidence contract
+## Completed
 
-- What: Update the public docs so the MuJoCo grasp example explains the paired-evidence
-  summary, explicit evidence states, and the intended `failed phase -> proof -> rerun`
-  workflow.
-- Why: The approved DX review intentionally kept docs sync out of the implementation
-  phase, but the artifact contract should become discoverable once it ships.
-- Pros: Better onboarding, less guesswork for new users, and alignment between the
-  generated report and the documented workflow.
-- Cons: More scope in the follow-up pass and a risk of documenting behavior before the
-  implementation stabilizes.
-- Context: Deferred in the approved DX review in favor of keeping phase 2 focused on
-  the artifact pack itself.
-- Depends on / blocked by: Phase 2 implementation merging first. Best follow-up path is
-  a dedicated docs sync pass, such as `/document-release`.
+### Sync README and docs to the new evidence contract
+
+- **Completed:** PR #201 (2026-04-15)
+- Updated `README.md`, `CONTRIBUTING.md`, and `ARCHITECTURE.md` so the MuJoCo grasp
+  example explains the paired-evidence summary, explicit evidence states, the
+  `failed phase -> proof -> rerun` loop, and the current contributor verification flow.
 
 ## 4. Extract a shared evidence contract only after a second stack needs it
 

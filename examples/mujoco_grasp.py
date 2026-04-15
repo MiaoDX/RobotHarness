@@ -17,6 +17,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -110,6 +111,43 @@ def _describe_evidence_state(manifest, evidence_pairs) -> str:
     return "FAIL/full evidence"
 
 
+def _looks_like_rendering_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    needles = (
+        "opengl",
+        "glfw",
+        "mjr_makecontext",
+        "valid gl context",
+        "platform library has not been loaded",
+    )
+    return any(needle in message for needle in needles)
+
+
+def _has_display() -> bool:
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _missing_render_backend_error() -> RuntimeError:
+    return RuntimeError(
+        "no display server was detected and MUJOCO_GL is unset, so MuJoCo cannot "
+        "create an OpenGL context"
+    )
+
+
+def _format_rendering_error(exc: BaseException) -> str:
+    gl_backend = os.environ.get("MUJOCO_GL", "") or "unset"
+    has_display = _has_display()
+    display_state = "set" if has_display else "unset"
+    return (
+        "MuJoCo renderer failed to start.\n"
+        f"Cause: {exc}\n"
+        f"Detected MUJOCO_GL={gl_backend}, DISPLAY={display_state}.\n"
+        "Fix: On headless Linux or CI, rerun with `MUJOCO_GL=osmesa` or "
+        "`MUJOCO_GL=egl`. On desktop, make sure an OpenGL context is available "
+        "before starting the example."
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Roboharness MuJoCo alarmed grasp loop")
     parser.add_argument(
@@ -143,12 +181,19 @@ def main() -> None:
     print("=" * 60)
 
     print("\n[1/5] Loading MuJoCo model (inline XML) ...")
-    backend = MuJoCoMeshcatBackend(
-        xml_string=GRASP_MJCF,
-        cameras=MUJOCO_GRASP_CAMERAS,
-        render_width=args.width,
-        render_height=args.height,
-    )
+    if not os.environ.get("MUJOCO_GL") and not _has_display():
+        raise SystemExit(_format_rendering_error(_missing_render_backend_error()))
+    try:
+        backend = MuJoCoMeshcatBackend(
+            xml_string=GRASP_MJCF,
+            cameras=MUJOCO_GRASP_CAMERAS,
+            render_width=args.width,
+            render_height=args.height,
+        )
+    except Exception as exc:
+        if _looks_like_rendering_error(exc):
+            raise SystemExit(_format_rendering_error(exc)) from exc
+        raise
     print("      Model loaded. Actuators: 3 (z-slide, left-finger, right-finger)")
 
     meshcat_viz: MeshcatVisualizer | None = None

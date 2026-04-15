@@ -20,12 +20,14 @@ Thank you for your interest in contributing! Roboharness is in early development
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Install dev dependencies: `pip install -e ".[dev]"`
+3. Install dev dependencies: `uv sync --dev` (preferred) or `python -m pip install -e ".[dev]"`
 4. Make your changes
-5. Run linting and tests:
+5. Run the repo verification commands:
    ```bash
-   ruff check src/ tests/
-   pytest
+   ruff check .
+   ruff format --check .
+   mypy src/
+   pytest -q
    ```
 6. Commit with a clear message
 7. Open a Pull Request
@@ -48,9 +50,10 @@ We especially welcome new simulator backends! To add one:
 ## Development Setup
 
 ```bash
-git clone https://github.com/MiaoDX/RobotHarness.git
-cd RobotHarness
-pip install -e ".[dev]"
+git clone https://github.com/MiaoDX/roboharness.git
+cd roboharness
+uv sync --dev    # preferred
+# or: python -m pip install -e ".[dev]"
 ```
 
 ## AI Agent Contributions

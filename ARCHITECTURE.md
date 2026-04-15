@@ -234,7 +234,7 @@ Currently supports **Unitree G1** humanoid robot:
 
 ### `reporting.py` — HTML Report Generation
 
-Generates self-contained HTML reports with multi-view screenshots at each checkpoint, state metadata, and optional embedded Meshcat 3D interactive scenes.
+Generates self-contained HTML reports with multi-view screenshots at each checkpoint, state metadata, shared summary styling, and optional embedded Meshcat 3D interactive scenes. The MuJoCo grasp wedge now uses this shell for an alarm-first summary plus current-vs-baseline evidence cards while keeping `autonomous_report.json` and `phase_manifest.json` canonical.
 
 ### `cli.py` — Command-Line Interface
 

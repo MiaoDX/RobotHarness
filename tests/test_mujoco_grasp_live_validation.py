@@ -29,7 +29,10 @@ from roboharness.evaluate.result import Verdict
 
 def _require_mujoco_rendering() -> None:
     """Skip when MuJoCo rendering is unavailable in the current environment."""
-    mujoco = pytest.importorskip("mujoco")
+    try:
+        import mujoco
+    except Exception as exc:
+        pytest.skip(f"MuJoCo not available: {exc}")
     gl_backend = os.environ.get("MUJOCO_GL", "").lower()
     has_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
     if not gl_backend and not has_display:

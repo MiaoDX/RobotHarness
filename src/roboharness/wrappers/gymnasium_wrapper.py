@@ -407,4 +407,9 @@ def _to_float(value: Any) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
+        logger.warning(
+            "Cannot convert reward value of type %s to float; using 0.0. "
+            "Pass a numeric type (int, float, np.ndarray, or tensor).",
+            type(value).__name__,
+        )
         return 0.0

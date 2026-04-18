@@ -70,3 +70,44 @@ This file captures deferred work from approved planning and review artifacts.
   validate the artifact after shipping, not before.
 - Depends on / blocked by: Phase 2 implementation landing. Suggested follow-ups are
   `/design-review` and `/devex-review`.
+
+## 6. Build a seeded evaluator corpus before treating the queue as trustworthy
+
+- What: Assemble seeded `good`, `bad`, and `ambiguous` cases for the MuJoCo wedge and
+  measure surfaced-case precision before the approval queue is treated as trustworthy.
+- Why: The reviewed CEO, engineering, and DX passes all converged on the same point:
+  a small queue that misses or misclassifies cases is worse than a larger honest one.
+- Pros: Makes queue trust measurable, catches suppressed-case failures early, and gives
+  the README/front door a defensible story.
+- Cons: Adds fixture and eval maintenance work.
+- Context: Deferred by the reviewed contract-first plan in
+  `showcase-repo-plan.md`. This is the gating follow-up for the "conditional trust"
+  decision, not optional polish.
+- Depends on / blocked by: the surfaced/suppressed-case implementation existing first.
+
+## 7. Revisit freeform prompt-to-contract compilation only after presets prove out
+
+- What: Expand from template-first contract compilation to broader prompt-assisted
+  authoring only after the schema, error envelope, and wedge defaults prove themselves.
+- Why: The reviewed plan explicitly rejected open-ended NL-to-contract compilation as a
+  v1 bet. It is a later expansion, not part of the first trust loop.
+- Pros: Keeps the first wedge boring and reliable while preserving the longer-term
+  ambition.
+- Cons: Delays the most magical version of the product story.
+- Context: Deferred by the reviewed CEO and engineering phases in
+  `showcase-repo-plan.md`.
+- Depends on / blocked by: preset adoption, schema stability, and evidence that the
+  current wedge is already trustworthy.
+
+## 8. Split the canonical spec from the review log once implementation starts
+
+- What: Separate the clean product/design contract from the long `/autoplan` review log
+  so implementers have one concise spec artifact to follow.
+- Why: The design and DX reviews both flagged that the current plan file is becoming a
+  mix of accepted product truth and review commentary.
+- Pros: Reduces implementation ambiguity, makes handoff cleaner, and keeps the repo's
+  canonical design artifacts easier to maintain.
+- Cons: Creates one more artifact to keep current.
+- Context: Deferred by the reviewed design phase in `showcase-repo-plan.md`.
+- Depends on / blocked by: final approval of the reviewed plan, then the start of the
+  implementation pass.

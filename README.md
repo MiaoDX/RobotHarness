@@ -1,38 +1,121 @@
-<div align="center">
-
 # Roboharness
 
-**A Visual Testing Harness for AI Coding Agents in Robot Simulation**
+Approval/evidence harness for unattended robot code changes.
 
 [![CI](https://github.com/MiaoDX/RobotHarness/actions/workflows/ci.yml/badge.svg)](https://github.com/MiaoDX/RobotHarness/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/roboharness)](https://pypi.org/project/roboharness/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-> Let Claude Code and Codex **see** what the robot is doing, **judge** if it's working, and **iterate** autonomously.
+Roboharness is not just a screenshot collector.
 
-<table>
-<tr>
-<td align="center"><b>Front View</b><br/><img src="assets/X32_Y28_Z13_front_view.gif" width="380"/><br/><sub>Plan → Pregrasp → Approach → Close → Lift → Holding</sub></td>
-<td align="center"><b>Top-Down View</b><br/><img src="assets/X26_Y22_Z13_topdown_view.gif" width="380"/><br/><sub>Top-down view: object alignment and grasp closure</sub></td>
-</tr>
-</table>
+The core wedge is:
 
-<p>
-  <img src="assets/architecture.svg" width="800" alt="Roboharness Architecture"/>
-</p>
+`long unattended agent run -> one proof pack -> short human review`
 
-### **[View Interactive Visual Reports →](https://miaodx.com/roboharness/)**
+The current proving ground is the deterministic MuJoCo grasp loop. Run one command,
+get back a compiled contract, metric-backed alarms, a phase manifest, an approval
+report, and an HTML proof surface that tells you what changed and what to do next.
 
-*Auto-generated from CI on every push to main — MuJoCo grasp, G1 WBC reach, G1 locomotion, native LeRobot G1 (GR00T + SONIC planner), standalone SONIC planner, and SONIC tracking.*
+## 10-Minute MuJoCo Wedge
 
-</div>
+```bash
+pip install roboharness[demo]
+python examples/mujoco_grasp.py --report
+```
 
-## Demos
+For headless Linux or CI:
+
+```bash
+MUJOCO_GL=egl python examples/mujoco_grasp.py --report
+# or
+MUJOCO_GL=osmesa python examples/mujoco_grasp.py --report
+```
+
+What you get back:
+
+- `contract.json` — compiled regression contract for this wedge run
+- `autonomous_report.json` — canonical metrics and baseline comparison
+- `alarms.json` — evaluator-backed hard failures
+- `phase_manifest.json` — first failing phase, selected views, rerun hint
+- `approval_report.json` — surfaced vs suppressed case decision for review
+- `report.html` — first-screen proof, not a folder hunt
+
+How to read it:
+
+1. Open `report.html`.
+2. Read the **Run Decision** banner first.
+3. Review only surfaced cases against the old baseline.
+4. Use `phase_manifest.json` and the rerun hint if you need to iterate again.
+
+Baseline rule:
+
+- Regression mode keeps the old baseline authoritative.
+- No new baseline is blessed automatically.
+
+## Why This Exists
+
+If Claude Code or Codex spends hours refactoring a robot behavior, the hard part is
+not generating more files. It is getting back one compact proof surface that answers:
+
+- what failed
+- where it failed first
+- what the current evidence looks like next to the blessed baseline
+- whether anything actually needs human review
+
+That is the job of the MuJoCo wedge today.
+
+## Installation Matrix
+
+```bash
+pip install roboharness                  # core (numpy only)
+pip install roboharness[demo]            # MuJoCo, Meshcat, Gymnasium, Rerun, Pillow
+pip install roboharness[demo,wbc]        # + whole-body control (Pinocchio, Pink)
+pip install roboharness[lerobot]         # LeRobot evaluation path
+pip install roboharness[dev]             # test/lint/type deps
+```
+
+## Progressive Disclosure
+
+- Preset-first: run `python examples/mujoco_grasp.py --report`
+- Advanced: pass `--contract-json /path/to/contract.json` to validate a pre-authored
+  contract before the wedge starts
+
+If a contract cannot be grounded safely, the run stops before execution and emits a
+user-facing error envelope with `problem`, `cause`, `fix`, `docs_url`, and `next_action`.
+
+## Proof Surface
+
+The first screen is meant to be actionable without replay:
+
+- **Run Decision** tells you whether the run is clean, reviewable, or degraded
+- **Approval Queue** shows changed or ambiguous cases only
+- **Current vs Baseline** shows the first manifest-selected proof pair
+- **Hard Metric Results** shows the evaluator-backed failures
+- **Phase Timeline** and the deeper checkpoint gallery stay available below the fold
+
+| pre_grasp | contact | grasp | lift |
+|:-:|:-:|:-:|:-:|
+| ![pre_grasp](assets/example_mujoco_grasp/pre_grasp_front.png) | ![contact](assets/example_mujoco_grasp/contact_front.png) | ![grasp](assets/example_mujoco_grasp/grasp_front.png) | ![lift](assets/example_mujoco_grasp/lift_front.png) |
+| Gripper above cube | Lowered onto cube | Fingers closed | Cube lifted |
+
+### View Interactive Reports
+
+- MuJoCo grasp: https://miaodx.com/roboharness/grasp/
+- G1 WBC reach: https://miaodx.com/roboharness/g1-reach/
+- G1 locomotion: https://miaodx.com/roboharness/g1-loco/
+- Native LeRobot GR00T: https://miaodx.com/roboharness/g1-native-groot/
+- Native LeRobot SONIC: https://miaodx.com/roboharness/g1-native-sonic/
+- SONIC planner: https://miaodx.com/roboharness/sonic-planner/
+- SONIC tracking: https://miaodx.com/roboharness/sonic/
+
+## Other Demos
+
+These are real integrations and proof surfaces, but they are not the front-door wedge:
 
 | Demo | Description | Report | Run |
 |:-----|:------------|:------:|:----|
-| **[MuJoCo Grasp](#mujoco-grasp)** | Scripted grasp with Meshcat 3D, multi-view captures, paired baseline proof | [Live](https://miaodx.com/roboharness/grasp/) | `python examples/mujoco_grasp.py --report` |
+| **[MuJoCo Grasp](#mujoco-grasp)** | Scripted grasp with Meshcat 3D, paired baseline proof, approval report | [Live](https://miaodx.com/roboharness/grasp/) | `python examples/mujoco_grasp.py --report` |
 | **[G1 WBC Reach](#g1-humanoid-wbc-reach)** | Whole-body IK reaching (Pinocchio + Pink) | [Live](https://miaodx.com/roboharness/g1-reach/) | `python examples/g1_wbc_reach.py --report` |
 | **[G1 Locomotion](#lerobot-g1-locomotion)** | GR00T RL stand→walk→stop, HuggingFace model | [Live](https://miaodx.com/roboharness/g1-loco/) | `python examples/lerobot_g1.py --report` |
 | **[G1 Native LeRobot (GR00T)](#native-lerobot-integration)** | Official `make_env()` factory + GR00T Balance + Walk | [Live](https://miaodx.com/roboharness/g1-native-groot/) | `python examples/lerobot_g1_native.py --controller groot --report` |
@@ -42,45 +125,13 @@
 
 ## Showcase Repository
 
-See real projects that consume roboharness as a pip dependency:
+The showcase repo is for external proof that roboharness works as a pip-installed
+dependency in real projects:
 
 - **[LeRobot Evaluation](https://github.com/roboharness/showcase/tree/main/lerobot-eval)** — visual regression testing for robot policies
 - **[GR00T WBC](https://github.com/roboharness/showcase/tree/main/groot-wbc)** — whole-body control integration
 
 Each showcase is self-contained, runs with `./run.sh`, and supports smoke mode for fast CI validation.
-
-## Installation
-
-```bash
-pip install roboharness                  # core (numpy only)
-pip install roboharness[demo]            # demo dependencies (MuJoCo, Meshcat, Gymnasium, Rerun, etc.)
-pip install roboharness[demo,wbc]        # + whole-body control (Pinocchio, Pink)
-pip install roboharness[dev]             # development + SONIC real-model test deps
-```
-
-## Quick Start
-
-### MuJoCo Grasp
-
-```bash
-pip install roboharness[demo]
-python examples/mujoco_grasp.py --report
-```
-
-For headless Linux or CI, use a software renderer:
-
-```bash
-MUJOCO_GL=egl python examples/mujoco_grasp.py --report    # preferred on most headless Linux
-MUJOCO_GL=osmesa python examples/mujoco_grasp.py --report # fallback if egl is unavailable
-```
-
-This example now produces a report artifact pack that is meant to be actionable without replay:
-- `report.html` opens with an alarm-first summary and a `Current vs Baseline` section for the first failing phase.
-- `autonomous_report.json` stays the canonical verdict and metric-delta contract.
-- `phase_manifest.json` tells the agent which phase failed, which views to inspect, and where to rerun from.
-- `alarms.json` captures evaluator-backed failures in machine-readable form.
-
-The first screen should answer three questions fast: what failed first, what does the current frame look like next to baseline, and what rerun target should I use next. Success runs render an explicit `PASS/no failed phase` state. Missing or ambiguous evidence says what is broken and how to recover.
 
 | pre_grasp | contact | grasp | lift |
 |:-:|:-:|:-:|:-:|

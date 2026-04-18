@@ -261,6 +261,104 @@ def generate_html_report(
          background: #f5f5f5; }}
   h1 {{ color: #333; border-bottom: 2px solid {accent_color}; padding-bottom: 10px; }}
   .summary {{ background: #e8f4fd; border-radius: 8px; padding: 16px; margin: 20px 0; }}
+  .run-decision {{
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin: 20px 0 16px;
+    background: linear-gradient(135deg, #0f172a, #1d4ed8);
+    color: white;
+  }}
+  .run-decision-main h3 {{ margin: 0; }}
+  .run-decision-main p {{ margin: 8px 0 0; line-height: 1.5; }}
+  .run-decision-kicker {{
+    margin: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.8);
+  }}
+  .run-baseline-authority {{ color: rgba(255,255,255,0.92); }}
+  .run-decision-meta {{
+    min-width: 220px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }}
+  .run-decision-meta p {{
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 8px;
+  }}
+  .run-decision-meta p:last-child {{ margin-bottom: 0; }}
+  .counts-strip {{
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    margin: 0 0 20px;
+  }}
+  .count-pill {{
+    background: white;
+    border: 1px solid #dbe4f0;
+    border-radius: 999px;
+    min-height: 64px;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }}
+  .count-pill span {{
+    color: #4b5563;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }}
+  .count-pill strong {{ color: #0f172a; font-size: 24px; }}
+  .approval-queue {{
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  }}
+  .approval-queue h3 {{ margin: 0; color: {accent_color}; }}
+  .approval-queue > div > p {{ margin: 8px 0 0; color: #4b5563; }}
+  .queue-list {{ display: grid; gap: 16px; margin-top: 16px; }}
+  .queue-card {{
+    border-radius: 10px;
+    border: 1px solid #dbe4f0;
+    background: #f8fbff;
+    padding: 16px;
+  }}
+  .queue-card p {{ margin: 10px 0 0; line-height: 1.5; }}
+  .queue-card-success {{
+    background: #ecfdf3;
+    border-color: #bbf7d0;
+    color: #166534;
+  }}
+  .queue-card-head {{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }}
+  .queue-badge {{
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }}
+  .queue-badge-case {{ background: #e5e7eb; color: #111827; }}
+  .queue-baseline-authority {{ color: #334155; }}
+  .queue-suppressed-copy {{ margin: 16px 0 0; color: #4b5563; }}
   .report-grid {{ display: grid; gap: 16px;
                   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }}
   .summary-card {{ background: white; border-radius: 8px; padding: 16px;

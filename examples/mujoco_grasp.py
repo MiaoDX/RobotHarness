@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """MuJoCo grasp wedge with evaluator-backed alarms and agent-readable artifacts.
 
-This example runs one deterministic grasp loop, emits three machine-readable
+This example runs one deterministic grasp loop, emits five machine-readable
 artifacts, and optionally renders an HTML report:
 
-  1. ``autonomous_report.json`` — single source of truth for metrics and baseline comparison
-  2. ``alarms.json`` — evaluator-derived alarm cards and statuses
-  3. ``phase_manifest.json`` — failed phase, views to inspect, and rerun hint
-  4. ``report.html`` — optional HTML report when ``--report`` is requested
+  1. ``contract.json`` — compiled regression contract for the current wedge run
+  2. ``autonomous_report.json`` — single source of truth for metrics and baseline comparison
+  3. ``alarms.json`` — evaluator-derived alarm cards and statuses
+  4. ``phase_manifest.json`` — failed phase, views to inspect, and rerun hint
+  5. ``approval_report.json`` — surfaced/suppressed review decision for the run
+  6. ``report.html`` — optional HTML report when ``--report`` is requested
 
 Run:
     pip install roboharness[demo]
@@ -22,6 +24,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from roboharness._utils import save_json
 from roboharness.backends.mujoco_meshcat import MuJoCoMeshcatBackend
 from roboharness.backends.visualizer import MeshcatVisualizer
 from roboharness.core.harness import Harness
@@ -38,11 +41,14 @@ try:
     from examples._mujoco_grasp_wedge import (
         BASELINE_REPORT_PATH,
         CANONICAL_REPORT_NAME,
+        ContractCompileError,
         build_alarms,
+        build_approval_report,
         build_autonomous_report,
         build_phase_manifest,
         build_summary_html,
         collect_phase_metrics,
+        compile_contract,
         evaluate_autonomous_report,
         load_blessed_baseline,
         resolve_evidence_pairs,
@@ -59,11 +65,14 @@ except ModuleNotFoundError:  # pragma: no cover - script execution path
     from _mujoco_grasp_wedge import (  # type: ignore[no-redef]
         BASELINE_REPORT_PATH,
         CANONICAL_REPORT_NAME,
+        ContractCompileError,
         build_alarms,
+        build_approval_report,
         build_autonomous_report,
         build_phase_manifest,
         build_summary_html,
         collect_phase_metrics,
+        compile_contract,
         evaluate_autonomous_report,
         load_blessed_baseline,
         resolve_evidence_pairs,
@@ -168,6 +177,14 @@ def main() -> None:
         help="Path to the blessed baseline autonomous_report.json fixture",
     )
     parser.add_argument(
+        "--contract-json",
+        default=None,
+        help=(
+            "Optional path to a pre-authored contract JSON file. "
+            "Defaults to the reviewed regression preset."
+        ),
+    )
+    parser.add_argument(
         "--assert-success",
         action="store_true",
         help="Exit non-zero if the evaluator produces degraded or failing alarms",
@@ -179,6 +196,31 @@ def main() -> None:
     print("=" * 60)
     print("  Roboharness: MuJoCo Alarmed Grasp Loop")
     print("=" * 60)
+
+    baseline_report_path = Path(args.baseline_report)
+    try:
+        contract = compile_contract(
+            baseline_source=str(baseline_report_path),
+            contract_path=args.contract_json,
+        )
+    except ContractCompileError as exc:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        diagnostics_path = output_dir / "contract_compile_error.json"
+        save_json(
+            {
+                "schema_version": 1,
+                "error": exc.envelope.to_dict(),
+            },
+            diagnostics_path,
+        )
+        print("\n[contract] Contract blocked before execution.")
+        print(f"      Problem: {exc.envelope.problem}")
+        print(f"      Cause: {exc.envelope.cause}")
+        print(f"      Fix: {exc.envelope.fix}")
+        print(f"      Docs: {exc.envelope.docs_url}")
+        print(f"      Next action: {exc.envelope.next_action}")
+        print(f"      Diagnostic artifact: {diagnostics_path}")
+        raise SystemExit(2) from exc
 
     print("\n[1/5] Loading MuJoCo model (inline XML) ...")
     if not os.environ.get("MUJOCO_GL") and not _has_display():
@@ -241,7 +283,6 @@ def main() -> None:
 
     print("[4/5] Building alarmed artifact pack ...")
     trial_dir = output_dir / MUJOCO_GRASP_TASK / "trial_001"
-    baseline_report_path = Path(args.baseline_report)
     baseline_visual_root = baseline_report_path.resolve().parent / "baseline_visual"
     baseline_report = load_blessed_baseline(baseline_report_path)
     snapshot_metrics = collect_phase_metrics(harness, backend, checkpoint_results)
@@ -259,6 +300,13 @@ def main() -> None:
     manifest = build_phase_manifest(autonomous_report, evaluation_result, alarms)
 
     evidence_pairs = []
+    approval_report = build_approval_report(
+        contract=contract,
+        report=autonomous_report,
+        evaluation_result=evaluation_result,
+        manifest=manifest,
+        evidence_pairs=evidence_pairs,
+    )
     canonical_report_path = output_dir / CANONICAL_REPORT_NAME
     if args.report:
         evidence_pairs = resolve_evidence_pairs(
@@ -267,6 +315,13 @@ def main() -> None:
             manifest=manifest,
             report=autonomous_report,
         )
+        approval_report = build_approval_report(
+            contract=contract,
+            report=autonomous_report,
+            evaluation_result=evaluation_result,
+            manifest=manifest,
+            evidence_pairs=evidence_pairs,
+        )
         html_report_path = generate_html_report(
             output_dir,
             summary_html=build_summary_html(
@@ -274,6 +329,8 @@ def main() -> None:
                 alarms,
                 manifest,
                 evidence_pairs,
+                contract=contract,
+                approval_report=approval_report,
             ),
             evaluation_result=evaluation_result,
         )
@@ -284,6 +341,8 @@ def main() -> None:
 
     write_artifact_pack(
         trial_dir=trial_dir,
+        contract=contract,
+        approval_report=approval_report,
         report=autonomous_report,
         evaluation_result=evaluation_result,
         alarms=alarms,
@@ -291,14 +350,22 @@ def main() -> None:
         report_generated=args.report,
     )
 
+    print(f"      contract.json: {trial_dir / 'contract.json'}")
     print(f"      autonomous_report.json: {report_path}")
     print(f"      alarms.json: {trial_dir / 'alarms.json'}")
     print(f"      phase_manifest.json: {trial_dir / 'phase_manifest.json'}")
+    print(f"      approval_report.json: {trial_dir / 'approval_report.json'}")
 
     print("[5/5] Summary")
     total_images = len(list(trial_dir.rglob("*_rgb.png"))) if trial_dir.exists() else 0
     selected_views = ", ".join(manifest.primary_views[:2]) if manifest.primary_views else "none"
     print(f"      {total_images} images saved to: {trial_dir}")
+    print(
+        "      Run state: "
+        f"{approval_report['run_state_title']}"
+        f" | surfaced: {approval_report['summary']['cases_surfaced']}"
+        f" | suppressed: {approval_report['summary']['cases_suppressed']}"
+    )
     verdict_line = (
         f"      Verdict: {evaluation_result.verdict.value.upper()}"
         f" | failed phase: {manifest.failed_phase or 'none'}"
@@ -309,6 +376,7 @@ def main() -> None:
     print(verdict_line)
     if args.report:
         print(f"      Evidence status: {_describe_evidence_state(manifest, evidence_pairs)}")
+    print(f"      Baseline authority: {approval_report['baseline_authority']}")
     print(f"      Agent next action: {manifest.agent_next_action}")
 
     failures = [result.message for result in evaluation_result.failed]

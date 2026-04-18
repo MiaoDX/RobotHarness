@@ -38,6 +38,10 @@ ASSET_ROOT = Path(__file__).resolve().parents[1] / "assets" / "example_mujoco_gr
 BASELINE_REPORT_PATH = ASSET_ROOT / "baseline_autonomous_report.json"
 BASELINE_VISUAL_ROOT = ASSET_ROOT / "baseline_visual"
 KNOWN_BAD_VISUAL_ROOT = ASSET_ROOT / "known_bad_visual"
+CONTRACT_SCHEMA_VERSION = "roboharness_contract/v1"
+APPROVAL_REPORT_SCHEMA_VERSION = "roboharness_report/v1"
+DEFAULT_CONTRACT_PRESET = "mujoco_regression_v1"
+CONTRACT_DOCS_URL = "docs/designs/unattended-refactor-harness-v1.md"
 PHASE_COMPARISON_METRICS = (
     "grip_center_error_mm",
     "pinch_gap_error_mm",
@@ -259,6 +263,248 @@ class EvidencePair:
     metric_explanations: list[MetricExplanation]
     interpretation_caption: str
     diagnostic_message: str | None = None
+
+
+@dataclass(frozen=True)
+class ErrorEnvelope:
+    """User-facing error contract shared across contract and report failures."""
+
+    problem: str
+    cause: str
+    fix: str
+    docs_url: str
+    recoverable: bool
+    next_action: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "problem": self.problem,
+            "cause": self.cause,
+            "fix": self.fix,
+            "docs_url": self.docs_url,
+            "recoverable": self.recoverable,
+            "next_action": self.next_action,
+        }
+
+
+class ContractCompileError(ValueError):
+    """Raised when a wedge contract cannot be grounded safely."""
+
+    def __init__(self, envelope: ErrorEnvelope):
+        super().__init__(f"{envelope.problem} {envelope.cause}")
+        self.envelope = envelope
+
+
+def build_default_contract(*, baseline_source: str) -> dict[str, Any]:
+    """Build the reviewed regression contract for the deterministic MuJoCo wedge."""
+    return {
+        "schema_version": CONTRACT_SCHEMA_VERSION,
+        "contract_id": "mujoco-grasp-regression-v1",
+        "contract_preset": DEFAULT_CONTRACT_PRESET,
+        "mode": "regression",
+        "source_prompt": (
+            "Keep the deterministic MuJoCo grasp loop aligned with the blessed baseline and "
+            "surface only materially changed cases for review."
+        ),
+        "cases": {
+            "source": "deterministic_mujoco_grasp",
+            "immutable": True,
+        },
+        "baseline_source": str(baseline_source),
+        "compile_policy": {
+            "on_ambiguity": "fail_closed",
+            "require_grounded_rules": True,
+        },
+        "runtime_policy": {
+            "on_ambiguous_verdict": "gather_more_evidence_but_never_self_pass",
+            "soft_stop": "agent_may_stop_when_goal_unreachable",
+            "hard_stop": {
+                "repeat_failure_signature_limit": 2,
+                "max_reruns": 12,
+            },
+            "failure_signature": [
+                "case_id",
+                "phase_id",
+                "violated_rule_id",
+            ],
+        },
+        "approval_policy": {
+            "surface_changed_cases_only": True,
+            "show_unchanged_case_count": True,
+            "require_user_blessing_for_new_baseline": True,
+        },
+        "rules": [_build_contract_rule(assertion) for assertion in MUJOCO_GRASP_ASSERTIONS],
+    }
+
+
+def compile_contract(
+    *,
+    baseline_source: str,
+    contract_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Load or build the contract and fail closed if it cannot be grounded safely."""
+    if contract_path is None:
+        contract = build_default_contract(baseline_source=baseline_source)
+    else:
+        try:
+            with Path(contract_path).open() as fh:
+                contract = json.load(fh)
+        except FileNotFoundError as exc:
+            raise _contract_error(
+                cause=f"contract file not found: {contract_path}",
+                fix="Pass an existing JSON file or omit --contract-json to use the default preset.",
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise _contract_error(
+                cause=f"contract JSON is invalid: {exc}",
+                fix="Fix the JSON syntax or omit --contract-json to use the default preset.",
+            ) from exc
+
+    validate_contract(contract)
+    return contract
+
+
+def validate_contract(contract: dict[str, Any]) -> None:
+    """Validate that the contract can be grounded by the current MuJoCo wedge."""
+    if contract.get("schema_version") != CONTRACT_SCHEMA_VERSION:
+        raise _contract_error(
+            cause=(
+                "schema_version must be "
+                f"'{CONTRACT_SCHEMA_VERSION}', got {contract.get('schema_version')!r}."
+            ),
+            fix="Use the reviewed v1 contract schema for this wedge.",
+        )
+
+    if contract.get("mode") not in {"regression", "migration"}:
+        raise _contract_error(
+            cause=f"mode must be 'regression' or 'migration', got {contract.get('mode')!r}.",
+            fix="Set mode to 'regression' or 'migration'.",
+        )
+
+    rules = contract.get("rules")
+    if not isinstance(rules, list) or not rules:
+        raise _contract_error(
+            cause="rules must be a non-empty list.",
+            fix="Provide at least one grounded rule in the contract.",
+        )
+
+    supported_metrics = {assertion.metric for assertion in MUJOCO_GRASP_ASSERTIONS}
+    for rule in rules:
+        rule_id = rule.get("id", "<missing-id>")
+        judge = rule.get("judge")
+        if judge != "metric":
+            raise _contract_error(
+                cause=(
+                    f"rule '{rule_id}' uses judge {judge!r}. The MuJoCo wedge grounds only "
+                    "metric rules today."
+                ),
+                fix="Use metric rules for this wedge or fall back to the default preset.",
+            )
+
+        evidence_at = rule.get("evidence_at")
+        if not isinstance(evidence_at, list) or not evidence_at:
+            raise _contract_error(
+                cause=f"rule '{rule_id}' is missing a non-empty evidence_at list.",
+                fix="Add at least one phase grounding to evidence_at.",
+            )
+        for location in evidence_at:
+            if not isinstance(location, dict) or not location.get("phase"):
+                raise _contract_error(
+                    cause=f"rule '{rule_id}' has an invalid evidence_at entry: {location!r}.",
+                    fix="Each evidence_at entry needs at least a phase string.",
+                )
+
+        pass_if = rule.get("pass_if")
+        if not isinstance(pass_if, dict):
+            raise _contract_error(
+                cause=f"rule '{rule_id}' is missing pass_if.",
+                fix="Add pass_if with metric, op, and value fields.",
+            )
+        metric = pass_if.get("metric")
+        if metric not in supported_metrics:
+            raise _contract_error(
+                cause=(
+                    f"rule '{rule_id}' references unsupported metric {metric!r}. "
+                    f"Supported metrics: {sorted(supported_metrics)!r}."
+                ),
+                fix="Use one of the wedge's supported evaluator metrics or omit --contract-json.",
+            )
+
+
+def build_approval_report(
+    *,
+    contract: dict[str, Any],
+    report: dict[str, Any],
+    evaluation_result: EvaluationResult,
+    manifest: PhaseManifest,
+    evidence_pairs: list[EvidencePair],
+) -> dict[str, Any]:
+    """Build the single-case approval artifact returned by the MuJoCo wedge."""
+    case_id = str(report.get("case_id", "deterministic_mujoco_grasp"))
+    evidence_state = _summary_evidence_state(manifest, evidence_pairs)
+    overall_verdict = _approval_overall_verdict(evaluation_result, evidence_state)
+    surfaced_cases: list[dict[str, Any]] = []
+    suppressed_cases: list[dict[str, Any]] = []
+
+    if overall_verdict == "PASS":
+        suppressed_cases.append(
+            {
+                "case_id": case_id,
+                "status": "UNCHANGED",
+                "reason": "no_material_change",
+            }
+        )
+    else:
+        surfaced_cases.append(
+            _build_surfaced_case(
+                contract=contract,
+                report=report,
+                evaluation_result=evaluation_result,
+                manifest=manifest,
+                evidence_pairs=evidence_pairs,
+                case_id=case_id,
+                overall_verdict=overall_verdict,
+                evidence_state=evidence_state,
+            )
+        )
+
+    run_state, run_title, run_message = _build_run_state(
+        overall_verdict=overall_verdict,
+        evidence_state=evidence_state,
+        surfaced_cases=surfaced_cases,
+    )
+    needs_baseline_blessing = (
+        contract.get("mode") == "migration" and overall_verdict == "PASS" and bool(surfaced_cases)
+    )
+
+    return {
+        "schema_version": APPROVAL_REPORT_SCHEMA_VERSION,
+        "contract_id": contract["contract_id"],
+        "mode": contract["mode"],
+        "overall_verdict": overall_verdict,
+        "stop_reason": _build_stop_reason(overall_verdict, evidence_state),
+        "run_state": run_state,
+        "run_state_title": run_title,
+        "run_state_message": run_message,
+        "baseline_authority": _baseline_authority_copy(contract["mode"]),
+        "summary": {
+            "cases_total": 1,
+            "cases_surfaced": len(surfaced_cases),
+            "cases_suppressed": len(suppressed_cases),
+            "cases_unchanged": len(suppressed_cases),
+            "reruns": 0 if overall_verdict == "PASS" else 1,
+        },
+        "surfaced_cases": surfaced_cases,
+        "suppressed_cases": suppressed_cases,
+        "unchanged": {
+            "count": len(suppressed_cases),
+        },
+        "user_action": {
+            "needs_review": bool(surfaced_cases),
+            "needs_baseline_blessing": needs_baseline_blessing,
+            "review_case_ids": [case["case_id"] for case in surfaced_cases],
+        },
+    }
 
 
 def load_blessed_baseline(path: str | Path | None = None) -> dict[str, Any]:
@@ -677,13 +923,15 @@ def resolve_evidence_pairs(
 def write_artifact_pack(
     *,
     trial_dir: Path,
+    contract: dict[str, Any],
+    approval_report: dict[str, Any],
     report: dict[str, Any],
     evaluation_result: EvaluationResult,
     alarms: list[AlarmRecord],
     manifest: PhaseManifest,
     report_generated: bool,
 ) -> None:
-    """Write the three machine-readable wedge artifacts into the trial directory."""
+    """Write the machine-readable wedge artifacts into the trial directory."""
     report_with_evaluation = dict(report)
     taxonomy, verdict_reasons = _build_failure_taxonomy(evaluation_result)
     report_with_evaluation["evaluation"] = evaluation_result.to_dict()
@@ -691,14 +939,17 @@ def write_artifact_pack(
     report_with_evaluation["verdict_reasons"] = verdict_reasons
     report_with_evaluation["failure_taxonomy"] = taxonomy
     artifacts: dict[str, str] = {
+        "contract": "contract.json",
         "autonomous_report": "autonomous_report.json",
         "alarms": "alarms.json",
         "phase_manifest": "phase_manifest.json",
+        "approval_report": "approval_report.json",
     }
     if report_generated:
         artifacts["report_html"] = CANONICAL_REPORT_NAME
     report_with_evaluation["artifacts"] = artifacts
 
+    save_json(contract, trial_dir / "contract.json")
     save_json(report_with_evaluation, trial_dir / "autonomous_report.json")
     save_json(
         {
@@ -711,6 +962,7 @@ def write_artifact_pack(
         trial_dir / "alarms.json",
     )
     save_json(manifest.to_dict(), trial_dir / "phase_manifest.json")
+    save_json(approval_report, trial_dir / "approval_report.json")
 
 
 def build_summary_html(
@@ -718,13 +970,20 @@ def build_summary_html(
     alarms: list[AlarmRecord],
     manifest: PhaseManifest,
     evidence_pairs: list[EvidencePair],
+    *,
+    contract: dict[str, Any],
+    approval_report: dict[str, Any],
 ) -> str:
     """Build the alarm-first HTML summary block for the shared report renderer."""
     visible_alarms = alarms[:4]
     alarm_cards = "".join(_render_alarm_card(alarm) for alarm in visible_alarms)
     evidence_state = _summary_evidence_state(manifest, evidence_pairs)
     evidence_section = _render_evidence_section(manifest, evidence_pairs)
-
+    decision_banner = _render_run_decision_banner(approval_report)
+    counts_strip = _render_case_counts(approval_report)
+    queue_section = _render_approval_queue(approval_report)
+    contract_section = _render_contract_section(contract)
+    baseline_section = _render_baseline_section(approval_report)
     phase_cards = "".join(_render_phase_card(report, status) for status in manifest.phase_statuses)
     baseline_name = html.escape(Path(str(report["baseline_source"])).name)
     failed_phase_text = html.escape(manifest.failed_phase or "none")
@@ -752,9 +1011,15 @@ def build_summary_html(
         )
 
     return (
+        f"{decision_banner}"
+        f"{counts_strip}"
+        f"{queue_section}"
+        '<section class="summary-card metric-results">'
+        "<h3>Hard Metric Results</h3>"
         '<div class="alarm-grid">'
         f"{alarm_cards}"
         "</div>"
+        "</section>"
         f"{evidence_section}"
         '<div class="agent-panel">'
         "<strong>Agent Next Action</strong>"
@@ -781,6 +1046,8 @@ def build_summary_html(
         f"<tr><th>Regressions</th><td><code>{html.escape(regressions)}</code></td></tr>"
         "</table></div>"
         "</div>"
+        f"{contract_section}"
+        f"{baseline_section}"
         "</div>"
     )
 
@@ -902,6 +1169,225 @@ def _build_failure_taxonomy(
             }
         )
     return taxonomy, verdict_reasons
+
+
+def _build_contract_rule(assertion: MetricAssertion) -> dict[str, Any]:
+    phase_id = "all" if assertion.phase == "*" else assertion.phase
+    evidence_at: dict[str, str] = {"phase": phase_id}
+    if assertion.phase != "*" and assertion.phase in MUJOCO_GRASP_PRIMARY_VIEWS:
+        evidence_at["view"] = MUJOCO_GRASP_PRIMARY_VIEWS[assertion.phase][0]
+    return {
+        "id": f"{phase_id}:{assertion.metric}",
+        "type": "metric_gate",
+        "judge": "metric",
+        "evidence_at": [evidence_at],
+        "pass_if": {
+            "metric": assertion.metric,
+            "op": assertion.operator.value,
+            "value": _serialize_threshold(assertion.threshold),
+        },
+        "severity": "fail",
+    }
+
+
+def _serialize_threshold(threshold: float | tuple[float, float]) -> float | list[float]:
+    if isinstance(threshold, tuple):
+        return [float(threshold[0]), float(threshold[1])]
+    return float(threshold)
+
+
+def _contract_error(*, cause: str, fix: str) -> ContractCompileError:
+    return ContractCompileError(
+        ErrorEnvelope(
+            problem="Contract blocked.",
+            cause=cause,
+            fix=fix,
+            docs_url=CONTRACT_DOCS_URL,
+            recoverable=True,
+            next_action="Fix contract",
+        )
+    )
+
+
+def _approval_overall_verdict(
+    evaluation_result: EvaluationResult,
+    evidence_state: str,
+) -> str:
+    if evidence_state == "FAIL/ambiguous still-image evidence":
+        return "AMBIGUOUS"
+    if evaluation_result.verdict.value == "pass":
+        return "PASS"
+    return "FAIL"
+
+
+def _build_run_state(
+    *,
+    overall_verdict: str,
+    evidence_state: str,
+    surfaced_cases: list[dict[str, Any]],
+) -> tuple[str, str, str]:
+    if overall_verdict == "PASS" and not surfaced_cases:
+        return (
+            "review_ready_success",
+            "No surfaced cases",
+            "No material changes surfaced. Old baseline remains authoritative.",
+        )
+    if evidence_state in {"FAIL/partial evidence", "FAIL/empty evidence"}:
+        return (
+            "partial_reviewable",
+            "Partial reviewable",
+            "Some review is possible, but one side of the proof is missing. Review cautiously.",
+        )
+    if evidence_state in {"FAIL/manifest mismatch", "FAIL/ambiguous still-image evidence"}:
+        return (
+            "evidence_degraded",
+            "Evidence degraded",
+            "Evidence is incomplete or weak. Review the surfaced case, but do not self-approve it.",
+        )
+    return (
+        "review_ready_surfaced",
+        "Review surfaced cases",
+        "Review surfaced cases against the old baseline.",
+    )
+
+
+def _build_stop_reason(overall_verdict: str, evidence_state: str) -> str:
+    if overall_verdict == "PASS":
+        return "all_rules_satisfied"
+    if overall_verdict == "AMBIGUOUS":
+        return "visual_intent_unclear"
+    if evidence_state == "FAIL/manifest mismatch":
+        return "evidence_contract_mismatch"
+    if evidence_state == "FAIL/partial evidence":
+        return "evidence_incomplete"
+    if evidence_state == "FAIL/empty evidence":
+        return "evidence_missing"
+    return "hard_metric_failed"
+
+
+def _baseline_authority_copy(mode: str) -> str:
+    if mode == "migration":
+        return (
+            "Migration mode. Old baseline remains authoritative until surfaced cases are "
+            "reviewed and a proposed baseline is explicitly blessed."
+        )
+    return (
+        "Regression mode. Old baseline remains authoritative. "
+        "No new baseline is available to bless."
+    )
+
+
+def _build_surfaced_case(
+    *,
+    contract: dict[str, Any],
+    report: dict[str, Any],
+    evaluation_result: EvaluationResult,
+    manifest: PhaseManifest,
+    evidence_pairs: list[EvidencePair],
+    case_id: str,
+    overall_verdict: str,
+    evidence_state: str,
+) -> dict[str, Any]:
+    proof_pair = next((pair for pair in evidence_pairs if pair.status != "mismatch"), None)
+    rules = _build_rule_outcomes(contract, evaluation_result, overall_verdict)
+    metrics = _build_metric_observations(evaluation_result, report)
+    return {
+        "case_id": case_id,
+        "status": _surfaced_case_status(contract["mode"], overall_verdict),
+        "material_reason": _material_reasons(overall_verdict, evidence_state),
+        "proof_panel": {
+            "phase_id": proof_pair.phase_id if proof_pair is not None else manifest.failed_phase_id,
+            "view": proof_pair.view_name if proof_pair is not None else None,
+            "status": proof_pair.status if proof_pair is not None else "empty",
+            "current_image": (
+                str(proof_pair.current_image_path)
+                if proof_pair and proof_pair.current_image_path
+                else None
+            ),
+            "baseline_image": (
+                str(proof_pair.baseline_image_path)
+                if proof_pair and proof_pair.baseline_image_path
+                else None
+            ),
+        },
+        "rules": rules,
+        "metrics": metrics,
+        "caption": _summary_evidence_message(manifest, evidence_pairs),
+    }
+
+
+def _build_rule_outcomes(
+    contract: dict[str, Any],
+    evaluation_result: EvaluationResult,
+    overall_verdict: str,
+) -> dict[str, list[str]]:
+    result_lookup = {
+        (
+            "all" if result.phase == "*" else result.phase,
+            result.metric,
+        ): result
+        for result in evaluation_result.results
+    }
+    passed: list[str] = []
+    failed: list[str] = []
+    ambiguous: list[str] = []
+    for rule in contract["rules"]:
+        pass_if = rule.get("pass_if", {})
+        metric = pass_if.get("metric")
+        evidence_at = rule.get("evidence_at", [{}])
+        phase_id = evidence_at[0].get("phase", "all")
+        result = result_lookup.get((phase_id, metric))
+        if result is None:
+            ambiguous.append(rule["id"])
+            continue
+        if result.passed:
+            passed.append(rule["id"])
+        else:
+            failed.append(rule["id"])
+    if overall_verdict == "AMBIGUOUS":
+        ambiguous.append("still_image_review_required")
+    return {
+        "passed": passed,
+        "failed": failed,
+        "ambiguous": ambiguous,
+    }
+
+
+def _build_metric_observations(
+    evaluation_result: EvaluationResult,
+    report: dict[str, Any],
+) -> list[dict[str, Any]]:
+    observations: list[dict[str, Any]] = []
+    for result in evaluation_result.failed[:2]:
+        observations.append(
+            {
+                "id": result.metric,
+                "verdict": "FAIL",
+                "observed": result.actual_value,
+                "baseline": _lookup_baseline_value(report, result.phase, result.metric),
+            }
+        )
+    return observations
+
+
+def _surfaced_case_status(mode: str, overall_verdict: str) -> str:
+    if overall_verdict == "AMBIGUOUS":
+        return "AMBIGUOUS"
+    if mode == "migration" and overall_verdict == "PASS":
+        return "INTENDED_CHANGE_CONFIRMED"
+    return "REGRESSION"
+
+
+def _material_reasons(overall_verdict: str, evidence_state: str) -> list[str]:
+    if overall_verdict == "AMBIGUOUS":
+        return ["visual_intent_unclear"]
+    if evidence_state == "FAIL/partial evidence":
+        return ["hard_metric_failed", "partial_evidence"]
+    if evidence_state == "FAIL/empty evidence":
+        return ["hard_metric_failed", "missing_evidence"]
+    if evidence_state == "FAIL/manifest mismatch":
+        return ["hard_metric_failed", "evidence_contract_mismatch"]
+    return ["hard_metric_failed"]
 
 
 def _metric_title(metric: str) -> str:
@@ -1251,6 +1737,129 @@ def _collect_diagnostic_messages(evidence_pairs: list[EvidencePair]) -> list[str
         if pair.diagnostic_message and pair.diagnostic_message not in diagnostics:
             diagnostics.append(pair.diagnostic_message)
     return diagnostics
+
+
+def _render_run_decision_banner(approval_report: dict[str, Any]) -> str:
+    return (
+        f'<section class="run-decision run-decision-{html.escape(approval_report["run_state"])}">'
+        '<div class="run-decision-main">'
+        '<p class="run-decision-kicker">Run Decision</p>'
+        f"<h3>{html.escape(approval_report['run_state_title'])}</h3>"
+        f"<p>{html.escape(approval_report['run_state_message'])}</p>"
+        '<p class="run-baseline-authority">'
+        f"{html.escape(approval_report['baseline_authority'])}"
+        "</p>"
+        "</div>"
+        '<div class="run-decision-meta">'
+        f"<p><strong>Verdict</strong><span>{html.escape(approval_report['overall_verdict'])}</span></p>"
+        f"<p><strong>Mode</strong><span>{html.escape(approval_report['mode'])}</span></p>"
+        "<p><strong>Stop reason</strong><span>"
+        f"{html.escape(approval_report['stop_reason'])}"
+        "</span></p>"
+        "</div>"
+        "</section>"
+    )
+
+
+def _render_case_counts(approval_report: dict[str, Any]) -> str:
+    summary = approval_report["summary"]
+    counts = (
+        ("Surfaced", summary["cases_surfaced"]),
+        ("Suppressed", summary["cases_suppressed"]),
+        ("Unchanged", summary["cases_unchanged"]),
+        ("Total", summary["cases_total"]),
+    )
+    pills = "".join(
+        (f'<div class="count-pill"><span>{html.escape(label)}</span><strong>{count}</strong></div>')
+        for label, count in counts
+    )
+    return f'<section class="counts-strip">{pills}</section>'
+
+
+def _render_approval_queue(approval_report: dict[str, Any]) -> str:
+    surfaced_cases = approval_report["surfaced_cases"]
+    if surfaced_cases:
+        cards = "".join(_render_queue_card(case, approval_report) for case in surfaced_cases)
+    else:
+        cards = (
+            '<article class="queue-card queue-card-success">'
+            "<strong>No material changes surfaced.</strong>"
+            "<p>Old baseline remains authoritative.</p>"
+            "</article>"
+        )
+    suppressed_summary = ""
+    if approval_report["suppressed_cases"]:
+        reason = approval_report["suppressed_cases"][0]["reason"].replace("_", " ")
+        suppressed_summary = (
+            '<p class="queue-suppressed-copy">'
+            f"Suppressed cases stay out of the first screen because: {html.escape(reason)}."
+            "</p>"
+        )
+    return (
+        '<section class="approval-queue">'
+        "<div>"
+        "<h3>Approval Queue</h3>"
+        "<p>Changed or ambiguous cases only. Unchanged cases stay off the first screen.</p>"
+        "</div>"
+        f'<div class="queue-list">{cards}</div>'
+        f"{suppressed_summary}"
+        "</section>"
+    )
+
+
+def _render_queue_card(case: dict[str, Any], approval_report: dict[str, Any]) -> str:
+    reasons = ", ".join(reason.replace("_", " ") for reason in case["material_reason"])
+    rules = case["rules"]
+    return (
+        '<article class="queue-card queue-card-surfaced">'
+        '<div class="queue-card-head">'
+        f'<span class="queue-badge">{html.escape(case["status"])}</span>'
+        f'<span class="queue-badge queue-badge-case">{html.escape(case["case_id"])}</span>'
+        "</div>"
+        f"<p><strong>Why surfaced:</strong> {html.escape(reasons)}</p>"
+        f"<p>{html.escape(case['caption'])}</p>"
+        f"<p><strong>Rules:</strong> passed {len(rules['passed'])}, failed {len(rules['failed'])}, "
+        f"ambiguous {len(rules['ambiguous'])}</p>"
+        '<p class="queue-baseline-authority">'
+        f"{html.escape(approval_report['baseline_authority'])}"
+        "</p>"
+        "</article>"
+    )
+
+
+def _render_contract_section(contract: dict[str, Any]) -> str:
+    return (
+        '<div class="summary-card">'
+        "<h3>Compiled Contract</h3>"
+        '<div class="table-scroll"><table class="meta-table">'
+        f"<tr><th>Contract</th><td><code>{html.escape(contract['contract_id'])}</code></td></tr>"
+        "<tr><th>Preset</th><td><code>"
+        f"{html.escape(contract.get('contract_preset', 'custom'))}"
+        "</code></td></tr>"
+        f"<tr><th>Mode</th><td><code>{html.escape(contract['mode'])}</code></td></tr>"
+        f"<tr><th>Rules</th><td>{len(contract['rules'])}</td></tr>"
+        f"<tr><th>Cases</th><td><code>{html.escape(str(contract['cases']['source']))}</code></td></tr>"
+        "</table></div>"
+        "</div>"
+    )
+
+
+def _render_baseline_section(approval_report: dict[str, Any]) -> str:
+    user_action = approval_report["user_action"]
+    if user_action["needs_baseline_blessing"]:
+        body = (
+            "A proposed baseline exists, but it remains inactive until every surfaced "
+            "case is reviewed and the reviewer explicitly blesses it."
+        )
+    else:
+        body = "No new baseline is available to bless for this run."
+    return (
+        '<div class="summary-card">'
+        "<h3>Baseline Promotion</h3>"
+        f"<p>{html.escape(approval_report['baseline_authority'])}</p>"
+        f"<p>{html.escape(body)}</p>"
+        "</div>"
+    )
 
 
 def _render_evidence_section(

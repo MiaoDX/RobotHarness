@@ -3,7 +3,12 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
-from examples._mujoco_grasp_wedge import PhaseManifest, build_summary_html
+from examples._mujoco_grasp_wedge import (
+    PhaseManifest,
+    build_approval_report,
+    build_default_contract,
+    build_summary_html,
+)
 from roboharness.evaluate.assertions import AssertionEngine, MetricAssertion
 from roboharness.evaluate.result import Operator, Severity
 from roboharness.reporting import generate_html_report
@@ -44,6 +49,7 @@ def test_generate_html_report_contains_responsive_table_and_meshcat_guards(tmp_p
 
 
 def test_build_summary_html_wraps_artifact_pack_table_for_small_screens() -> None:
+    contract = build_default_contract(baseline_source="baseline_autonomous_report.json")
     manifest = PhaseManifest(
         task="mujoco_grasp",
         verdict="pass",
@@ -58,12 +64,34 @@ def test_build_summary_html_wraps_artifact_pack_table_for_small_screens() -> Non
         phase_aliases={},
         phase_statuses=[],
     )
+    approval_report = build_approval_report(
+        contract=contract,
+        report={
+            "case_id": "deterministic_mujoco_grasp",
+            "baseline_source": "baseline_autonomous_report.json",
+            "summary_metrics": {},
+            "baseline_summary_metrics": {},
+        },
+        evaluation_result=AssertionEngine(
+            [MetricAssertion("loop_runtime_s", Operator.LT, 10.0, Severity.MAJOR)]
+        ).evaluate({"summary_metrics": {"loop_runtime_s": 5.0}}),
+        manifest=manifest,
+        evidence_pairs=[],
+    )
 
     html = build_summary_html(
-        {"baseline_source": "baseline_autonomous_report.json", "snapshot_metrics": {}},
+        {
+            "case_id": "deterministic_mujoco_grasp",
+            "baseline_source": "baseline_autonomous_report.json",
+            "summary_metrics": {},
+            "baseline_summary_metrics": {},
+            "snapshot_metrics": {},
+        },
         [],
         manifest,
         [],
+        contract=contract,
+        approval_report=approval_report,
     )
 
     assert '<div class="table-scroll"><table class="meta-table">' in html

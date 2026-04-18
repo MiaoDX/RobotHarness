@@ -5,7 +5,9 @@ import copy
 from examples._mujoco_grasp_wedge import (
     BASELINE_VISUAL_ROOT,
     build_alarms,
+    build_approval_report,
     build_autonomous_report,
+    build_default_contract,
     build_phase_manifest,
     build_summary_html,
     evaluate_autonomous_report,
@@ -17,6 +19,7 @@ from roboharness.evaluate.result import Verdict
 
 def test_pass_manifest_and_summary_do_not_emit_failure_only_metadata() -> None:
     baseline = load_blessed_baseline()
+    contract = build_default_contract(baseline_source="fixture")
     report = build_autonomous_report(
         snapshot_metrics=copy.deepcopy(baseline["snapshot_metrics"]),
         baseline_report=baseline,
@@ -31,8 +34,22 @@ def test_pass_manifest_and_summary_do_not_emit_failure_only_metadata() -> None:
         manifest=manifest,
         report=report,
     )
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=evidence_pairs,
+    )
 
-    html = build_summary_html(report, alarms, manifest, evidence_pairs)
+    html = build_summary_html(
+        report,
+        alarms,
+        manifest,
+        evidence_pairs,
+        contract=contract,
+        approval_report=approval_report,
+    )
 
     assert result.verdict is Verdict.PASS
     assert manifest.failed_phase_id is None

@@ -21,13 +21,17 @@ from examples._mujoco_grasp_fixture import (
 from examples._mujoco_grasp_wedge import (
     BASELINE_VISUAL_ROOT,
     KNOWN_BAD_VISUAL_ROOT,
+    ContractCompileError,
     build_alarms,
+    build_approval_report,
     build_autonomous_report,
+    build_default_contract,
     build_phase_manifest,
     build_summary_html,
     evaluate_autonomous_report,
     load_blessed_baseline,
     resolve_evidence_pairs,
+    validate_contract,
     write_artifact_pack,
 )
 from roboharness.evaluate.result import Verdict
@@ -53,6 +57,25 @@ def _build_known_bad_contract() -> tuple[dict[str, Any], Any, list[Any], Any]:
     return report, result, alarms, manifest
 
 
+def _build_review_bundle() -> tuple[dict[str, Any], dict[str, Any], Any, list[Any], Any, list[Any]]:
+    report, result, alarms, manifest = _build_known_bad_contract()
+    contract = build_default_contract(baseline_source="fixture")
+    evidence_pairs = resolve_evidence_pairs(
+        trial_dir=KNOWN_BAD_VISUAL_ROOT,
+        baseline_visual_root=BASELINE_VISUAL_ROOT,
+        manifest=manifest,
+        report=report,
+    )
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=evidence_pairs,
+    )
+    return contract, approval_report, report, result, alarms, evidence_pairs
+
+
 def _write_png(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_ONE_PIXEL_PNG)
@@ -76,6 +99,37 @@ def test_load_blessed_baseline_has_expected_contract() -> None:
     assert baseline["phase_order"] == MUJOCO_GRASP_PHASE_ORDER
     assert baseline["summary_metrics"]["loop_runtime_s"] > 0.0
     assert baseline["snapshot_metrics"]["approach"]["grip_center_error_mm"] > 0.0
+
+
+def test_default_contract_is_valid_and_grounded() -> None:
+    contract = build_default_contract(baseline_source="fixture")
+
+    validate_contract(contract)
+
+    assert contract["schema_version"] == "roboharness_contract/v1"
+    assert contract["contract_id"] == "mujoco-grasp-regression-v1"
+    assert contract["mode"] == "regression"
+    assert contract["cases"]["source"] == "deterministic_mujoco_grasp"
+    assert contract["approval_policy"]["surface_changed_cases_only"] is True
+    assert contract["rules"]
+    assert all(rule["judge"] == "metric" for rule in contract["rules"])
+    assert all(rule["evidence_at"] for rule in contract["rules"])
+
+
+def test_validate_contract_rejects_missing_grounding() -> None:
+    contract = build_default_contract(baseline_source="fixture")
+    broken_rule = copy.deepcopy(contract["rules"][0])
+    broken_rule["evidence_at"] = []
+    contract["rules"][0] = broken_rule
+
+    with pytest.raises(ContractCompileError) as excinfo:
+        validate_contract(contract)
+
+    envelope = excinfo.value.envelope.to_dict()
+    assert envelope["problem"] == "Contract blocked."
+    assert "evidence_at" in envelope["cause"]
+    assert envelope["recoverable"] is True
+    assert envelope["next_action"] == "Fix contract"
 
 
 def test_evaluation_passes_when_current_run_matches_blessed_baseline() -> None:
@@ -109,6 +163,7 @@ def test_manifest_localizes_first_regression_to_approach() -> None:
 
 def test_write_artifact_pack_skips_report_html_when_report_not_generated(tmp_path: Path) -> None:
     baseline = load_blessed_baseline()
+    contract = build_default_contract(baseline_source="fixture")
     report = build_autonomous_report(
         snapshot_metrics=copy.deepcopy(baseline["snapshot_metrics"]),
         baseline_report=baseline,
@@ -117,11 +172,20 @@ def test_write_artifact_pack_skips_report_html_when_report_not_generated(tmp_pat
     result = evaluate_autonomous_report(report, report_path="trial/autonomous_report.json")
     alarms = build_alarms(report, result)
     manifest = build_phase_manifest(report, result, alarms)
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=[],
+    )
     trial_dir = tmp_path / "trial_001"
     trial_dir.mkdir()
 
     write_artifact_pack(
         trial_dir=trial_dir,
+        contract=contract,
+        approval_report=approval_report,
         report=report,
         evaluation_result=result,
         alarms=alarms,
@@ -130,12 +194,89 @@ def test_write_artifact_pack_skips_report_html_when_report_not_generated(tmp_pat
     )
 
     autonomous_report = json.loads((trial_dir / "autonomous_report.json").read_text())
+    compiled_contract = json.loads((trial_dir / "contract.json").read_text())
+    approval_json = json.loads((trial_dir / "approval_report.json").read_text())
     alarms_report = json.loads((trial_dir / "alarms.json").read_text())
     phase_manifest = json.loads((trial_dir / "phase_manifest.json").read_text())
 
     assert "report_html" not in autonomous_report["artifacts"]
+    assert autonomous_report["artifacts"]["contract"] == "contract.json"
+    assert autonomous_report["artifacts"]["approval_report"] == "approval_report.json"
+    assert compiled_contract["contract_id"] == "mujoco-grasp-regression-v1"
+    assert approval_json["overall_verdict"] == "PASS"
+    assert approval_json["summary"]["cases_surfaced"] == 0
     assert alarms_report["verdict"] == "pass"
     assert phase_manifest["failed_phase_id"] is None
+
+
+def test_approval_report_surfaces_the_first_regression_case() -> None:
+    contract, approval_report, _report, result, _alarms, evidence_pairs = _build_review_bundle()
+
+    assert contract["mode"] == "regression"
+    assert result.verdict is Verdict.FAIL
+    assert approval_report["overall_verdict"] == "FAIL"
+    assert approval_report["run_state"] == "review_ready_surfaced"
+    assert approval_report["summary"] == {
+        "cases_total": 1,
+        "cases_surfaced": 1,
+        "cases_suppressed": 0,
+        "cases_unchanged": 0,
+        "reruns": 1,
+    }
+    assert approval_report["surfaced_cases"][0]["case_id"] == "deterministic_mujoco_grasp"
+    assert approval_report["surfaced_cases"][0]["status"] == "REGRESSION"
+    assert approval_report["surfaced_cases"][0]["material_reason"] == ["hard_metric_failed"]
+    assert approval_report["surfaced_cases"][0]["rules"]["failed"]
+    assert approval_report["user_action"] == {
+        "needs_review": True,
+        "needs_baseline_blessing": False,
+        "review_case_ids": ["deterministic_mujoco_grasp"],
+    }
+    assert [pair.status for pair in evidence_pairs] == ["full", "full"]
+
+
+def test_approval_report_suppresses_clean_case_when_run_matches_baseline() -> None:
+    baseline = load_blessed_baseline()
+    contract = build_default_contract(baseline_source="fixture")
+    report = build_autonomous_report(
+        snapshot_metrics=copy.deepcopy(baseline["snapshot_metrics"]),
+        baseline_report=baseline,
+        baseline_source="fixture",
+    )
+    result = evaluate_autonomous_report(report)
+    alarms = build_alarms(report, result)
+    manifest = build_phase_manifest(report, result, alarms)
+
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=[],
+    )
+
+    assert approval_report["overall_verdict"] == "PASS"
+    assert approval_report["run_state"] == "review_ready_success"
+    assert approval_report["surfaced_cases"] == []
+    assert approval_report["suppressed_cases"] == [
+        {
+            "case_id": "deterministic_mujoco_grasp",
+            "status": "UNCHANGED",
+            "reason": "no_material_change",
+        }
+    ]
+    assert approval_report["summary"] == {
+        "cases_total": 1,
+        "cases_surfaced": 0,
+        "cases_suppressed": 1,
+        "cases_unchanged": 1,
+        "reruns": 0,
+    }
+    assert approval_report["user_action"] == {
+        "needs_review": False,
+        "needs_baseline_blessing": False,
+        "review_case_ids": [],
+    }
 
 
 def test_known_bad_fixture_resolves_two_ordered_evidence_pairs() -> None:
@@ -157,24 +298,35 @@ def test_known_bad_fixture_resolves_two_ordered_evidence_pairs() -> None:
 
 
 def test_summary_html_renders_current_vs_baseline_evidence_with_metric_copy() -> None:
-    report, _result, alarms, manifest = _build_known_bad_contract()
-    evidence_pairs = resolve_evidence_pairs(
-        trial_dir=KNOWN_BAD_VISUAL_ROOT,
-        baseline_visual_root=BASELINE_VISUAL_ROOT,
-        manifest=manifest,
-        report=report,
+    contract, approval_report, report, _result, alarms, evidence_pairs = _build_review_bundle()
+    manifest = build_phase_manifest(report, evaluate_autonomous_report(report), alarms)
+
+    html = build_summary_html(
+        report,
+        alarms,
+        manifest,
+        evidence_pairs,
+        contract=contract,
+        approval_report=approval_report,
     )
 
-    html = build_summary_html(report, alarms, manifest, evidence_pairs)
-
+    assert "Run Decision" in html
+    assert "Review surfaced cases" in html
+    assert "Approval Queue" in html
+    assert "Compiled Contract" in html
+    assert "Baseline Promotion" in html
     assert "Current vs Baseline" in html
     assert "FAIL/full evidence" in html
+    assert "Surfaced" in html
+    assert ">1<" in html
     assert "Current" in html
     assert "Baseline" in html
     assert "grip_center_error_mm:" in html
     assert "threshold 12.0" in html
     assert "data:image/png;base64," in html
+    assert "Regression mode. Old baseline remains authoritative." in html
     assert "Agent Next Action" in html
+    assert "Hard Metric Results" in html
     assert "Artifact Pack" in html
     assert "Phase Timeline" in html
 
@@ -203,7 +355,8 @@ def test_summary_html_degrades_cleanly_when_one_side_of_evidence_is_missing(
     missing_role: str,
     expected_copy: str,
 ) -> None:
-    report, _result, alarms, manifest = _build_known_bad_contract()
+    report, result, alarms, manifest = _build_known_bad_contract()
+    contract = build_default_contract(baseline_source="fixture")
     current_root = tmp_path / "current"
     baseline_root = tmp_path / "baseline"
 
@@ -220,7 +373,21 @@ def test_summary_html_degrades_cleanly_when_one_side_of_evidence_is_missing(
         manifest=manifest,
         report=report,
     )
-    html = build_summary_html(report, alarms, manifest, evidence_pairs)
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=evidence_pairs,
+    )
+    html = build_summary_html(
+        report,
+        alarms,
+        manifest,
+        evidence_pairs,
+        contract=contract,
+        approval_report=approval_report,
+    )
 
     assert [pair.view_name for pair in evidence_pairs] == ["side", "top"]
     assert evidence_pairs[0].status == "full"
@@ -233,6 +400,7 @@ def test_summary_html_degrades_cleanly_when_one_side_of_evidence_is_missing(
 
 def test_summary_html_renders_explicit_success_state_for_pass_runs() -> None:
     baseline = load_blessed_baseline()
+    contract = build_default_contract(baseline_source="fixture")
     report = build_autonomous_report(
         snapshot_metrics=copy.deepcopy(baseline["snapshot_metrics"]),
         baseline_report=baseline,
@@ -241,6 +409,13 @@ def test_summary_html_renders_explicit_success_state_for_pass_runs() -> None:
     result = evaluate_autonomous_report(report)
     alarms = build_alarms(report, result)
     manifest = build_phase_manifest(report, result, alarms)
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=[],
+    )
 
     evidence_pairs = resolve_evidence_pairs(
         trial_dir=KNOWN_BAD_VISUAL_ROOT,
@@ -248,15 +423,25 @@ def test_summary_html_renders_explicit_success_state_for_pass_runs() -> None:
         manifest=manifest,
         report=report,
     )
-    html = build_summary_html(report, alarms, manifest, evidence_pairs)
+    html = build_summary_html(
+        report,
+        alarms,
+        manifest,
+        evidence_pairs,
+        contract=contract,
+        approval_report=approval_report,
+    )
 
     assert result.verdict is Verdict.PASS
     assert evidence_pairs == []
+    assert approval_report["surfaced_cases"] == []
     assert (
         manifest.agent_next_action
         == "No rerun required. The canonical primary views match baseline; inspect the final "
         "lift captures only if you are chasing a visual false negative."
     )
+    assert "No material changes surfaced." in html
+    assert "Old baseline remains authoritative." in html
     assert "PASS/no failed phase" in html
     assert "No visual regression detected for the canonical primary views." in html
     assert manifest.agent_next_action in html
@@ -267,7 +452,8 @@ def test_summary_html_renders_explicit_success_state_for_pass_runs() -> None:
 
 
 def test_summary_html_renders_manifest_mismatch_banner_instead_of_crashing() -> None:
-    report, _result, alarms, manifest = _build_known_bad_contract()
+    report, result, alarms, manifest = _build_known_bad_contract()
+    contract = build_default_contract(baseline_source="fixture")
     mismatch_manifest = replace(
         manifest,
         primary_views=["front"],
@@ -280,7 +466,21 @@ def test_summary_html_renders_manifest_mismatch_banner_instead_of_crashing() -> 
         manifest=mismatch_manifest,
         report=report,
     )
-    html = build_summary_html(report, alarms, mismatch_manifest, evidence_pairs)
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=mismatch_manifest,
+        evidence_pairs=evidence_pairs,
+    )
+    html = build_summary_html(
+        report,
+        alarms,
+        mismatch_manifest,
+        evidence_pairs,
+        contract=contract,
+        approval_report=approval_report,
+    )
 
     assert [pair.status for pair in evidence_pairs] == ["mismatch"]
     assert "FAIL/manifest mismatch" in html

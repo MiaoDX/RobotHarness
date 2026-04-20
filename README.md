@@ -2,7 +2,7 @@
 
 Approval/evidence harness for unattended robot code changes.
 
-[![CI](https://github.com/MiaoDX/RobotHarness/actions/workflows/ci.yml/badge.svg)](https://github.com/MiaoDX/RobotHarness/actions/workflows/ci.yml)
+[![CI](https://github.com/MiaoDX/roboharness/actions/workflows/ci.yml/badge.svg)](https://github.com/MiaoDX/roboharness/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/roboharness)](https://pypi.org/project/roboharness/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -51,8 +51,8 @@ checkout.
 This path exercises the shipped MuJoCo approval wedge from this repository.
 
 ```bash
-git clone https://github.com/MiaoDX/RobotHarness.git
-cd RobotHarness
+git clone https://github.com/MiaoDX/roboharness.git
+cd roboharness
 python -m pip install -e ".[demo]"
 python examples/mujoco_grasp.py --report
 ```

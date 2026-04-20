@@ -6,7 +6,7 @@ Thank you for your interest in contributing! Roboharness is in early development
 
 ### Reporting Bugs
 
-- Open an issue on [GitHub Issues](https://github.com/MiaoDX/RobotHarness/issues)
+- Open an issue on [GitHub Issues](https://github.com/MiaoDX/roboharness/issues)
 - Include your Python version, OS, and simulator versions
 - Provide a minimal reproducible example if possible
 

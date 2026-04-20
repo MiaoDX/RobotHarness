@@ -3,6 +3,10 @@
 This file defines the default operating playbook for coding agents working in this repository.
 Its scope is the entire repo tree rooted at this directory.
 
+## Steering priority
+
+Before implementing broad changes, read `docs/steering/current.md` for the active milestone and non-goals.
+
 ## 0) First-read policy (mandatory)
 
 Before running any command, read in this order:

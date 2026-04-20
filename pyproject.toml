@@ -70,10 +70,10 @@ dev = [
 roboharness = "roboharness.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/MiaoDX/RobotHarness"
-Repository = "https://github.com/MiaoDX/RobotHarness"
-Issues = "https://github.com/MiaoDX/RobotHarness/issues"
-Documentation = "https://github.com/MiaoDX/RobotHarness/tree/main/docs"
+Homepage = "https://github.com/MiaoDX/roboharness"
+Repository = "https://github.com/MiaoDX/roboharness"
+Issues = "https://github.com/MiaoDX/roboharness/issues"
+Documentation = "https://github.com/MiaoDX/roboharness/tree/main/docs"
 
 [tool.hatch.metadata]
 allow-direct-references = true

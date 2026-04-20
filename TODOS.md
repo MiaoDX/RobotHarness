@@ -51,6 +51,14 @@ This file captures deferred work from approved planning and review artifacts.
 - Outcome: the report design contract held, but the README front door needed an honest
   split between package-first integration and the repo-only MuJoCo wedge demo.
 
+### Build a seeded evaluator corpus before treating the queue as trustworthy
+
+- **Completed:** 2026-04-20
+- Added `tests/test_mujoco_grasp_seeded_corpus.py` with seeded `good`, `bad`, and
+  `ambiguous` cases for the MuJoCo wedge.
+- The corpus locks surfaced-case precision `1.0`, surfaced-case recall `1.0`, and the
+  trust boundary that ambiguous still-image evidence must stay review-required.
+
 ## 4. Extract a shared evidence contract only after a second stack needs it
 
 - What: Promote the phase-local evidence-pair resolver into a shared abstraction only
@@ -64,20 +72,6 @@ This file captures deferred work from approved planning and review artifacts.
   extraction trigger explicitly.
 - Depends on / blocked by: A second task or stack proving it needs the same
   `manifest-selected paired evidence` contract.
-
-## 6. Build a seeded evaluator corpus before treating the queue as trustworthy
-
-- What: Assemble seeded `good`, `bad`, and `ambiguous` cases for the MuJoCo wedge and
-  measure surfaced-case precision before the approval queue is treated as trustworthy.
-- Why: The reviewed CEO, engineering, and DX passes all converged on the same point:
-  a small queue that misses or misclassifies cases is worse than a larger honest one.
-- Pros: Makes queue trust measurable, catches suppressed-case failures early, and gives
-  the README/front door a defensible story.
-- Cons: Adds fixture and eval maintenance work.
-- Context: Deferred by the reviewed contract-first plan in
-  `showcase-repo-plan.md`. This is the gating follow-up for the "conditional trust"
-  decision, not optional polish.
-- Depends on / blocked by: the surfaced/suppressed-case implementation existing first.
 
 ## 7. Revisit freeform prompt-to-contract compilation only after presets prove out
 

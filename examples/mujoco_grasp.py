@@ -42,6 +42,7 @@ try:
         BASELINE_REPORT_PATH,
         CANONICAL_REPORT_NAME,
         ContractCompileError,
+        available_contract_presets,
         build_alarms,
         build_approval_report,
         build_autonomous_report,
@@ -66,6 +67,7 @@ except ModuleNotFoundError:  # pragma: no cover - script execution path
         BASELINE_REPORT_PATH,
         CANONICAL_REPORT_NAME,
         ContractCompileError,
+        available_contract_presets,
         build_alarms,
         build_approval_report,
         build_autonomous_report,
@@ -177,11 +179,28 @@ def main() -> None:
         help="Path to the blessed baseline autonomous_report.json fixture",
     )
     parser.add_argument(
+        "--contract-preset",
+        choices=available_contract_presets(),
+        default=available_contract_presets()[0],
+        help=(
+            "Grounded contract preset to use when --contract-json / --contract-prompt are omitted."
+        ),
+    )
+    contract_source_group = parser.add_mutually_exclusive_group()
+    contract_source_group.add_argument(
         "--contract-json",
         default=None,
         help=(
             "Optional path to a pre-authored contract JSON file. "
-            "Defaults to the reviewed regression preset."
+            "Overrides --contract-preset and skips prompt-assisted preset selection."
+        ),
+    )
+    contract_source_group.add_argument(
+        "--contract-prompt",
+        default=None,
+        help=(
+            "Optional natural-language intent for constrained preset selection. "
+            "This wedge only grounds prompt text to reviewed regression/migration presets."
         ),
     )
     parser.add_argument(
@@ -202,6 +221,8 @@ def main() -> None:
         contract = compile_contract(
             baseline_source=str(baseline_report_path),
             contract_path=args.contract_json,
+            contract_preset=args.contract_preset,
+            contract_prompt=args.contract_prompt,
         )
     except ContractCompileError as exc:
         output_dir.mkdir(parents=True, exist_ok=True)

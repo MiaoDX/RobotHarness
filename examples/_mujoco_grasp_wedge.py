@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import html
 import json
 from dataclasses import dataclass
@@ -12,6 +11,20 @@ from typing import Any
 import numpy as np
 
 from roboharness._utils import save_json
+from roboharness.approval.evidence import (
+    EvidencePair,
+    EvidenceTarget,
+    MetricExplanation,
+)
+from roboharness.approval.evidence import (
+    render_lightbox_shell as _render_lightbox_shell,
+)
+from roboharness.approval.evidence import (
+    render_zoomable_image as _render_zoomable_image,
+)
+from roboharness.approval.evidence import (
+    resolve_evidence_pairs as resolve_shared_evidence_pairs,
+)
 from roboharness.evaluate.assertions import AssertionEngine, MetricAssertion
 from roboharness.evaluate.result import EvaluationResult, Operator, Severity
 
@@ -43,7 +56,38 @@ KNOWN_BAD_VISUAL_ROOT = ASSET_ROOT / "known_bad_visual"
 CONTRACT_SCHEMA_VERSION = "roboharness_contract/v1"
 APPROVAL_REPORT_SCHEMA_VERSION = "roboharness_report/v1"
 DEFAULT_CONTRACT_PRESET = "mujoco_regression_v1"
+MIGRATION_CONTRACT_PRESET = "mujoco_migration_guarded_v1"
+SUPPORTED_CONTRACT_PRESETS = (
+    DEFAULT_CONTRACT_PRESET,
+    MIGRATION_CONTRACT_PRESET,
+)
 CONTRACT_DOCS_URL = "docs/designs/unattended-refactor-harness-v1.md"
+REGRESSION_PROMPT_MARKERS = (
+    "regression",
+    "same behavior",
+    "no behavior change",
+    "keep baseline",
+    "keep aligned",
+    "unchanged",
+)
+MIGRATION_PROMPT_MARKERS = (
+    "migration",
+    "intended change",
+    "manual blessing",
+    "requires review",
+    "review against the old baseline",
+    "bless",
+)
+UNSUPPORTED_PROMPT_MARKERS = (
+    "visual_goal",
+    "anti_goal",
+    "anti-goal",
+    "top-down",
+    "top down",
+    "ball grasp",
+    "palm-down",
+    "palm down",
+)
 PHASE_COMPARISON_METRICS = (
     "grip_center_error_mm",
     "pinch_gap_error_mm",
@@ -249,29 +293,6 @@ class PhaseManifest:
         }
 
 
-@dataclass
-class MetricExplanation:
-    """Single metric chip rendered in the summary evidence cards."""
-
-    metric: str
-    copy: str
-
-
-@dataclass
-class EvidencePair:
-    """Current-vs-baseline evidence pair for one selected phase/view."""
-
-    phase_id: str
-    phase_label: str
-    view_name: str
-    current_image_path: Path | None
-    baseline_image_path: Path | None
-    status: str
-    metric_explanations: list[MetricExplanation]
-    interpretation_caption: str
-    diagnostic_message: str | None = None
-
-
 @dataclass(frozen=True)
 class ErrorEnvelope:
     """User-facing error contract shared across contract and report failures."""
@@ -302,17 +323,55 @@ class ContractCompileError(ValueError):
         self.envelope = envelope
 
 
+def available_contract_presets() -> tuple[str, ...]:
+    """Return the grounded preset names supported by the MuJoCo wedge."""
+    return SUPPORTED_CONTRACT_PRESETS
+
+
 def build_default_contract(*, baseline_source: str) -> dict[str, Any]:
     """Build the reviewed regression contract for the deterministic MuJoCo wedge."""
-    return {
-        "schema_version": CONTRACT_SCHEMA_VERSION,
-        "contract_id": "mujoco-grasp-regression-v1",
-        "contract_preset": DEFAULT_CONTRACT_PRESET,
-        "mode": "regression",
-        "source_prompt": (
+    return build_contract_from_preset(
+        baseline_source=baseline_source,
+        contract_preset=DEFAULT_CONTRACT_PRESET,
+    )
+
+
+def build_contract_from_preset(
+    *,
+    baseline_source: str,
+    contract_preset: str,
+    source_prompt: str | None = None,
+) -> dict[str, Any]:
+    """Build a grounded contract from one of the reviewed MuJoCo presets."""
+    if contract_preset not in SUPPORTED_CONTRACT_PRESETS:
+        raise _contract_error(
+            cause=(
+                f"unsupported contract preset {contract_preset!r}. "
+                f"Supported presets: {list(SUPPORTED_CONTRACT_PRESETS)!r}."
+            ),
+            fix="Choose one of the reviewed preset names for this wedge.",
+        )
+    if contract_preset == MIGRATION_CONTRACT_PRESET:
+        contract_id = "mujoco-grasp-migration-guarded-v1"
+        mode = "migration"
+        default_prompt = (
+            "Treat this MuJoCo wedge run as an intended change, keep the evaluator "
+            "metric gates authoritative, and require explicit human review before "
+            "blessing any new baseline."
+        )
+    else:
+        contract_id = "mujoco-grasp-regression-v1"
+        mode = "regression"
+        default_prompt = (
             "Keep the deterministic MuJoCo grasp loop aligned with the blessed baseline and "
             "surface only materially changed cases for review."
-        ),
+        )
+    return {
+        "schema_version": CONTRACT_SCHEMA_VERSION,
+        "contract_id": contract_id,
+        "contract_preset": contract_preset,
+        "mode": mode,
+        "source_prompt": source_prompt or default_prompt,
         "cases": {
             "source": "deterministic_mujoco_grasp",
             "immutable": True,
@@ -344,14 +403,74 @@ def build_default_contract(*, baseline_source: str) -> dict[str, Any]:
     }
 
 
+def compile_contract_prompt(
+    *,
+    baseline_source: str,
+    contract_prompt: str,
+) -> dict[str, Any]:
+    """Compile a constrained natural-language prompt into a reviewed preset."""
+    normalized_prompt = " ".join(contract_prompt.lower().split())
+    if any(marker in normalized_prompt for marker in UNSUPPORTED_PROMPT_MARKERS):
+        raise _contract_error(
+            cause=(
+                "contract prompt asks for visual or open-ended rule authoring that this wedge "
+                "does not ground safely."
+            ),
+            fix=(
+                "Use --contract-preset for reviewed preset selection, or pass "
+                "--contract-json with explicit metric_gate rules."
+            ),
+        )
+
+    is_regression = any(marker in normalized_prompt for marker in REGRESSION_PROMPT_MARKERS)
+    is_migration = any(marker in normalized_prompt for marker in MIGRATION_PROMPT_MARKERS)
+    if is_regression and is_migration:
+        raise _contract_error(
+            cause="contract prompt mixes regression and migration intent in one request.",
+            fix="Choose one approval mode per run, or use --contract-preset explicitly.",
+        )
+    if is_migration:
+        preset = MIGRATION_CONTRACT_PRESET
+    elif is_regression:
+        preset = DEFAULT_CONTRACT_PRESET
+    else:
+        raise _contract_error(
+            cause=(
+                "contract prompt could not be grounded to a reviewed preset. "
+                "This wedge only supports prompt-assisted preset selection today."
+            ),
+            fix=(
+                "Use prompt text that clearly says regression or migration intent, or pass "
+                "--contract-preset / --contract-json."
+            ),
+        )
+
+    return build_contract_from_preset(
+        baseline_source=baseline_source,
+        contract_preset=preset,
+        source_prompt=contract_prompt,
+    )
+
+
 def compile_contract(
     *,
     baseline_source: str,
     contract_path: str | Path | None = None,
+    contract_preset: str = DEFAULT_CONTRACT_PRESET,
+    contract_prompt: str | None = None,
 ) -> dict[str, Any]:
     """Load or build the contract and fail closed if it cannot be grounded safely."""
     if contract_path is None:
-        contract = build_default_contract(baseline_source=baseline_source)
+        if contract_prompt is not None:
+            contract = compile_contract_prompt(
+                baseline_source=baseline_source,
+                contract_prompt=contract_prompt,
+            )
+        else:
+            contract = build_contract_from_preset(
+                baseline_source=baseline_source,
+                contract_preset=contract_preset,
+            )
     else:
         try:
             with Path(contract_path).open() as fh:
@@ -876,7 +995,7 @@ def resolve_evidence_pairs(
 
     canonical_views = list(report.get("primary_views", {}).get(failed_phase_id, []))
     metric_explanations = _build_metric_explanations(report, failed_phase_id)
-    pairs: list[EvidencePair] = []
+    targets: list[EvidenceTarget] = []
 
     for view_name in manifest.primary_views[:2]:
         expected_rel = f"{failed_phase_id}/{view_name}_rgb.png"
@@ -886,138 +1005,60 @@ def resolve_evidence_pairs(
                 f"The report requested {failed_phase_id}/{view_name}, but no matching asset "
                 "exists under the blessed baseline root."
             )
-            pairs.append(
-                EvidencePair(
+            targets.append(
+                EvidenceTarget(
                     phase_id=failed_phase_id,
                     phase_label=failed_phase,
                     view_name=view_name,
-                    current_image_path=None,
-                    baseline_image_path=None,
-                    status="mismatch",
-                    metric_explanations=[],
-                    interpretation_caption=message,
-                    diagnostic_message=message,
+                    current_relative_path=expected_rel,
+                    baseline_relative_path=expected_rel,
+                    forced_mismatch_message=message,
                 )
             )
             continue
 
-        current_image_path = _resolve_visual_image(trial_dir, failed_phase_id, view_name)
-        baseline_image_path = _resolve_visual_image(
-            baseline_visual_root,
-            failed_phase_id,
-            view_name,
-        )
-        if current_image_path is None or baseline_image_path is None:
-            message = (
-                "Manifest/view contract mismatch. "
-                f"The report requested {failed_phase_id}/{view_name}, but the resolved asset "
-                "path escaped the allowed evidence roots."
-            )
-            pairs.append(
-                EvidencePair(
-                    phase_id=failed_phase_id,
-                    phase_label=failed_phase,
-                    view_name=view_name,
-                    current_image_path=None,
-                    baseline_image_path=None,
-                    status="mismatch",
-                    metric_explanations=[],
-                    interpretation_caption=message,
-                    diagnostic_message=message,
-                )
-            )
-            continue
-
-        current_exists = current_image_path.exists()
-        baseline_exists = baseline_image_path.exists()
-        if current_exists and baseline_exists:
-            status = "ambiguous" if _metric_set_is_ambiguous(metric_explanations) else "full"
-            diagnostic_message = (
-                f"Still-image evidence is suggestive for {failed_phase_id}/{view_name}, "
-                f"but temporal proof is weak. Re-run from {manifest.rerun_hint} if motion "
-                "timing is part of the diagnosis."
-                if status == "ambiguous"
-                else None
-            )
-            pairs.append(
-                EvidencePair(
-                    phase_id=failed_phase_id,
-                    phase_label=failed_phase,
-                    view_name=view_name,
-                    current_image_path=current_image_path,
-                    baseline_image_path=baseline_image_path,
-                    status=status,
-                    metric_explanations=metric_explanations,
-                    interpretation_caption=_build_interpretation_caption(
-                        phase_id=failed_phase_id,
-                        phase_label=failed_phase,
-                        view_name=view_name,
-                        status=status,
-                    ),
-                    diagnostic_message=diagnostic_message,
-                )
-            )
-            continue
-
-        if current_exists or baseline_exists:
-            if not baseline_exists:
-                diagnostic_message = (
-                    f"Baseline image missing for {failed_phase_id}/{view_name}. Rebuild or "
-                    "restore the blessed baseline pack."
-                )
-                current_path: Path | None = current_image_path
-                baseline_path: Path | None = None
-            else:
-                diagnostic_message = (
-                    f"Current capture missing for {failed_phase_id}/{view_name}. Re-run from "
-                    f"{manifest.rerun_hint} to rebuild evidence."
-                )
-                current_path = None
-                baseline_path = baseline_image_path
-            pairs.append(
-                EvidencePair(
-                    phase_id=failed_phase_id,
-                    phase_label=failed_phase,
-                    view_name=view_name,
-                    current_image_path=current_path,
-                    baseline_image_path=baseline_path,
-                    status="partial",
-                    metric_explanations=metric_explanations,
-                    interpretation_caption=_build_interpretation_caption(
-                        phase_id=failed_phase_id,
-                        phase_label=failed_phase,
-                        view_name=view_name,
-                        status="partial",
-                    ),
-                    diagnostic_message=diagnostic_message,
-                )
-            )
-            continue
-
-        diagnostic_message = (
-            "No visual evidence available for the failing phase. "
-            f"Re-run from {manifest.rerun_hint} to rebuild evidence."
-        )
-        pairs.append(
-            EvidencePair(
+        targets.append(
+            EvidenceTarget(
                 phase_id=failed_phase_id,
                 phase_label=failed_phase,
                 view_name=view_name,
-                current_image_path=None,
-                baseline_image_path=None,
-                status="empty",
-                metric_explanations=metric_explanations,
-                interpretation_caption=_build_interpretation_caption(
-                    phase_id=failed_phase_id,
-                    phase_label=failed_phase,
-                    view_name=view_name,
-                    status="empty",
+                current_relative_path=expected_rel,
+                baseline_relative_path=expected_rel,
+                missing_baseline_message=(
+                    f"Baseline image missing for {failed_phase_id}/{view_name}. Rebuild or "
+                    "restore the blessed baseline pack."
                 ),
-                diagnostic_message=diagnostic_message,
+                missing_current_message=(
+                    f"Current capture missing for {failed_phase_id}/{view_name}. Re-run from "
+                    f"{manifest.rerun_hint} to rebuild evidence."
+                ),
+                empty_message=(
+                    "No visual evidence available for the failing phase. "
+                    f"Re-run from {manifest.rerun_hint} to rebuild evidence."
+                ),
+                ambiguous_message=(
+                    f"Still-image evidence is suggestive for {failed_phase_id}/{view_name}, "
+                    f"but temporal proof is weak. Re-run from {manifest.rerun_hint} if motion "
+                    "timing is part of the diagnosis."
+                ),
             )
         )
 
-    return pairs
+    return resolve_shared_evidence_pairs(
+        current_root=trial_dir,
+        baseline_root=baseline_visual_root,
+        targets=targets,
+        metric_explanations=metric_explanations,
+        caption_builder=lambda target, status: _build_interpretation_caption(
+            phase_id=target.phase_id,
+            phase_label=target.phase_label,
+            view_name=target.view_name,
+            status=status,
+        ),
+        ambiguity_selector=(
+            (lambda _target: True) if _metric_set_is_ambiguous(metric_explanations) else None
+        ),
+    )
 
 
 def write_artifact_pack(
@@ -1679,16 +1720,6 @@ def _render_phase_card(report: dict[str, Any], status: PhaseStatus) -> str:
     )
 
 
-def _resolve_visual_image(root: Path, phase_id: str, view_name: str) -> Path | None:
-    root_resolved = root.resolve()
-    candidate = (root / phase_id / f"{view_name}_rgb.png").resolve()
-    try:
-        candidate.relative_to(root_resolved)
-    except ValueError:
-        return None
-    return candidate
-
-
 def _build_metric_explanations(report: dict[str, Any], phase_id: str) -> list[MetricExplanation]:
     phase_candidates = _collect_assertion_metric_explanations(
         report,
@@ -2146,8 +2177,8 @@ def _render_evidence_card(pair: EvidencePair) -> str:
         f'<span class="evidence-badge evidence-badge-status">{html.escape(pair.status)}</span>'
         "</div>"
         '<div class="evidence-compare-grid">'
-        f"{_render_evidence_media(pair, role='Current')}"
-        f"{_render_evidence_media(pair, role='Baseline')}"
+        f"{_render_evidence_media(pair, side='current')}"
+        f"{_render_evidence_media(pair, side='baseline')}"
         "</div>"
         f'<div class="evidence-chip-row">{chips}</div>'
         f"{temporal_evidence}"
@@ -2161,18 +2192,19 @@ def _render_metric_chip(explanation: MetricExplanation) -> str:
     return f'<span class="metric-chip">{html.escape(explanation.copy)}</span>'
 
 
-def _render_evidence_media(pair: EvidencePair, *, role: str) -> str:
-    if role == "Current":
+def _render_evidence_media(pair: EvidencePair, *, side: str) -> str:
+    if side == "current":
         image_path = pair.current_image_path
-        fallback = _missing_role_message(pair, role)
+        fallback = _missing_role_message(pair, side)
+        label = pair.current_label
     else:
         image_path = pair.baseline_image_path
-        fallback = _missing_role_message(pair, role)
+        fallback = _missing_role_message(pair, side)
+        label = pair.baseline_label
 
-    label = f"{role}"
-    alt = f"{pair.phase_label} ({pair.phase_id}) {pair.view_name} {role.lower()} evidence"
+    alt = f"{pair.phase_label} ({pair.phase_id}) {pair.view_name} {label} evidence"
     if image_path is not None and image_path.exists():
-        caption = f"{role} {pair.phase_label} / {pair.view_name}"
+        caption = f"{label} {pair.phase_label} / {pair.view_name}"
         return (
             '<figure class="evidence-figure">'
             f'<div class="evidence-role">{html.escape(label)}</div>'
@@ -2184,28 +2216,23 @@ def _render_evidence_media(pair: EvidencePair, *, role: str) -> str:
         '<figure class="evidence-figure">'
         f'<div class="evidence-role">{html.escape(label)}</div>'
         f'<div class="evidence-placeholder" role="img" aria-label="{html.escape(fallback)}">'
-        f"{html.escape(role)}"
+        f"{html.escape(label)}"
         "</div>"
         f"<figcaption>{html.escape(fallback)}</figcaption>"
         "</figure>"
     )
 
 
-def _missing_role_message(pair: EvidencePair, role: str) -> str:
+def _missing_role_message(pair: EvidencePair, side: str) -> str:
     if pair.diagnostic_message:
-        if role == "Current" and "Current capture missing" in pair.diagnostic_message:
+        if side == "current" and "Current capture missing" in pair.diagnostic_message:
             return pair.diagnostic_message
-        if role == "Baseline" and "Baseline image missing" in pair.diagnostic_message:
+        if side == "baseline" and "Baseline image missing" in pair.diagnostic_message:
             return pair.diagnostic_message
         if pair.status in {"empty", "mismatch"}:
             return pair.diagnostic_message
-    return f"{role} image missing for {pair.phase_id}/{pair.view_name}."
-
-
-def _image_data_uri(path: Path) -> str:
-    mime = "image/png"
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f"data:{mime};base64,{encoded}"
+    label = pair.current_label if side == "current" else pair.baseline_label
+    return f"{label} image missing for {pair.phase_id}/{pair.view_name}."
 
 
 def _render_temporal_evidence(pair: EvidencePair) -> str:
@@ -2292,101 +2319,3 @@ def _image_root_from_path(path: Path | None) -> Path | None:
     if len(parents) < 2:
         return None
     return parents[1]
-
-
-def _render_zoomable_image(
-    image_path: Path,
-    *,
-    alt: str,
-    caption: str,
-    class_name: str = "evidence-zoom-button",
-) -> str:
-    image_src = _image_data_uri(image_path)
-    return (
-        f'<button type="button" class="{html.escape(class_name)}" '
-        f'aria-label="Expand {html.escape(caption)}" '
-        f'data-lightbox-caption="{html.escape(caption)}">'
-        f'<img src="{html.escape(image_src)}" alt="{html.escape(alt)}" loading="lazy"/>'
-        "</button>"
-    )
-
-
-def _render_lightbox_shell() -> str:
-    return "\n".join(
-        [
-            '<div class="image-lightbox" data-evidence-lightbox hidden aria-hidden="true">',
-            '  <div class="image-lightbox-backdrop" data-lightbox-close></div>',
-            '  <div class="image-lightbox-dialog" role="dialog" aria-modal="true"',
-            '       aria-labelledby="image-lightbox-title">',
-            '    <div class="image-lightbox-toolbar">',
-            '      <p class="image-lightbox-kicker" id="image-lightbox-title">'
-            "Expanded evidence</p>",
-            '      <button type="button" class="image-lightbox-close" '
-            "data-lightbox-close>Close</button>",
-            "    </div>",
-            '    <img class="image-lightbox-image" data-lightbox-image alt="" />',
-            '    <p class="image-lightbox-caption" data-lightbox-caption></p>',
-            "  </div>",
-            "</div>",
-            "<script>",
-            "(function () {",
-            "  if (window.__roboharnessEvidenceLightboxBound) {",
-            "    return;",
-            "  }",
-            "  window.__roboharnessEvidenceLightboxBound = true;",
-            '  var lightbox = document.querySelector("[data-evidence-lightbox]");',
-            "  if (!lightbox) {",
-            "    return;",
-            "  }",
-            '  var lightboxImage = lightbox.querySelector("[data-lightbox-image]");',
-            '  var lightboxCaption = lightbox.querySelector("[data-lightbox-caption]");',
-            '  var closeButton = lightbox.querySelector(".image-lightbox-close");',
-            "  var lastTrigger = null;",
-            "  function closeLightbox() {",
-            "    if (lightbox.hidden) {",
-            "      return;",
-            "    }",
-            "    lightbox.hidden = true;",
-            '    lightbox.setAttribute("aria-hidden", "true");',
-            '    document.body.classList.remove("lightbox-open");',
-            '    lightboxImage.removeAttribute("src");',
-            '    lightboxImage.setAttribute("alt", "");',
-            '    lightboxCaption.textContent = "";',
-            "    if (lastTrigger) {",
-            "      lastTrigger.focus();",
-            "      lastTrigger = null;",
-            "    }",
-            "  }",
-            '  document.addEventListener("click", function (event) {',
-            '    var trigger = event.target.closest(".evidence-zoom-button");',
-            "    if (trigger) {",
-            '      var triggerImage = trigger.querySelector("img");',
-            "      if (!triggerImage) {",
-            "        return;",
-            "      }",
-            "      event.preventDefault();",
-            "      lastTrigger = trigger;",
-            '      lightboxImage.setAttribute("src", triggerImage.getAttribute("src") || "");',
-            '      lightboxImage.setAttribute("alt", triggerImage.getAttribute("alt") || "");',
-            '      lightboxCaption.textContent = trigger.getAttribute("data-lightbox-caption")',
-            '        || triggerImage.getAttribute("alt") || "";',
-            "      lightbox.hidden = false;",
-            '      lightbox.setAttribute("aria-hidden", "false");',
-            '      document.body.classList.add("lightbox-open");',
-            "      closeButton.focus();",
-            "      return;",
-            "    }",
-            '    if (!lightbox.hidden && event.target.closest("[data-lightbox-close]")) {',
-            "      event.preventDefault();",
-            "      closeLightbox();",
-            "    }",
-            "  });",
-            '  document.addEventListener("keydown", function (event) {',
-            '    if (event.key === "Escape" && !lightbox.hidden) {',
-            "      closeLightbox();",
-            "    }",
-            "  });",
-            "})();",
-            "</script>",
-        ]
-    )

@@ -37,9 +37,15 @@ trustworthy proof pack that makes the final decision legible.
 The contract compiler should:
 
 - parse the user prompt into a small JSON contract
+- keep progressive disclosure explicit:
+  - preset-first for the default path
+  - prompt-assisted preset selection for convenience
+  - raw JSON only for advanced users
 - require every rule to declare:
   - `judge`: `metric`, `visual`, or `hybrid`
   - `evidence_at`: phase, view, and optionally motion window
+- refuse open-ended prompt authoring if the request cannot be grounded to a reviewed
+  preset or explicit rule set
 - ask the user before execution if any rule cannot be grounded safely
 - fail closed if the ambiguity is not resolved
 

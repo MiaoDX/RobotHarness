@@ -22,12 +22,15 @@ from examples._mujoco_grasp_wedge import (
     BASELINE_VISUAL_ROOT,
     KNOWN_BAD_VISUAL_ROOT,
     ContractCompileError,
+    available_contract_presets,
     build_alarms,
     build_approval_report,
     build_autonomous_report,
+    build_contract_from_preset,
     build_default_contract,
     build_phase_manifest,
     build_summary_html,
+    compile_contract,
     evaluate_autonomous_report,
     load_blessed_baseline,
     resolve_evidence_pairs,
@@ -131,6 +134,57 @@ def test_default_contract_is_valid_and_grounded() -> None:
     assert contract["rules"]
     assert all(rule["judge"] == "metric" for rule in contract["rules"])
     assert all(rule["evidence_at"] for rule in contract["rules"])
+
+
+def test_available_contract_presets_include_regression_and_migration() -> None:
+    assert available_contract_presets() == (
+        "mujoco_regression_v1",
+        "mujoco_migration_guarded_v1",
+    )
+
+
+def test_build_contract_from_migration_preset_is_grounded() -> None:
+    contract = build_contract_from_preset(
+        baseline_source="fixture",
+        contract_preset="mujoco_migration_guarded_v1",
+    )
+
+    validate_contract(contract)
+
+    assert contract["contract_id"] == "mujoco-grasp-migration-guarded-v1"
+    assert contract["contract_preset"] == "mujoco_migration_guarded_v1"
+    assert contract["mode"] == "migration"
+
+
+def test_compile_contract_prompt_selects_regression_preset() -> None:
+    contract = compile_contract(
+        baseline_source="fixture",
+        contract_prompt="keep regression mode with no behavior change against the baseline",
+    )
+
+    assert contract["contract_preset"] == "mujoco_regression_v1"
+    assert contract["mode"] == "regression"
+    assert contract["source_prompt"].startswith("keep regression mode")
+
+
+def test_compile_contract_prompt_selects_migration_preset() -> None:
+    contract = compile_contract(
+        baseline_source="fixture",
+        contract_prompt="treat this as migration mode and require manual blessing after review",
+    )
+
+    assert contract["contract_preset"] == "mujoco_migration_guarded_v1"
+    assert contract["mode"] == "migration"
+
+
+def test_compile_contract_prompt_fails_closed_for_unsupported_visual_authoring() -> None:
+    with pytest.raises(ContractCompileError) as excinfo:
+        compile_contract(
+            baseline_source="fixture",
+            contract_prompt="switch to a top-down ball grasp with palm-down visual goals",
+        )
+
+    assert "does not ground safely" in excinfo.value.envelope.cause
 
 
 def test_validate_contract_rejects_missing_grounding() -> None:

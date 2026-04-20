@@ -24,7 +24,9 @@ surface that tells you what changed and what to do next.
 This README preview uses the kept review angles from the same G1 humanoid run:
 Meshcat front-to-back on the left and MuJoCo top-down on the right. Each frame
 keeps its phase name visible so you can compare humanoid behavior across
-frameworks without opening the full report first.
+frameworks without opening the full report first. To regenerate the same proof
+surface locally from the committed bundle, run
+`python examples/g1_cross_framework_report.py`.
 
 ## Choose Your Start
 
@@ -110,8 +112,12 @@ pip install roboharness[dev]             # test/lint/type deps
 
 - Package-first: wire the wrapper or `Harness` API into your existing codebase
 - Repo demo: from a clone of this repo, run `python examples/mujoco_grasp.py --report`
+- Preset-first: pass `--contract-preset mujoco_regression_v1` or
+  `--contract-preset mujoco_migration_guarded_v1`
+- Prompt-assisted: pass `--contract-prompt "treat this as migration mode and require manual blessing"`
+  to select one of the reviewed presets without opening JSON
 - Advanced: pass `--contract-json /path/to/contract.json` to validate a pre-authored
-  contract before the wedge starts
+  metric-only contract before the wedge starts
 
 If a contract cannot be grounded safely, the run stops before execution and emits a
 user-facing error envelope with `problem`, `cause`, `fix`, `docs_url`, and `next_action`.
@@ -150,6 +156,7 @@ These are real integrations and proof surfaces, but they are not the front-door 
 | Demo | Description | Report | Run |
 |:-----|:------------|:------:|:----|
 | **[MuJoCo Grasp](#mujoco-grasp)** | Scripted grasp with Meshcat 3D, paired baseline proof, approval report | [Live](https://miaodx.com/roboharness/grasp/) | `python examples/mujoco_grasp.py --report` |
+| **G1 Cross-Framework Proof** | Committed Meshcat vs MuJoCo paired-evidence report for one G1 bundle | repo-only | `python examples/g1_cross_framework_report.py` |
 | **[G1 WBC Reach](#g1-humanoid-wbc-reach)** | Whole-body IK reaching (Pinocchio + Pink) | [Live](https://miaodx.com/roboharness/g1-reach/) | `python examples/g1_wbc_reach.py --report` |
 | **[G1 Locomotion](#lerobot-g1-locomotion)** | GR00T RL stand→walk→stop, HuggingFace model | [Live](https://miaodx.com/roboharness/g1-loco/) | `python examples/lerobot_g1.py --report` |
 | **[G1 Native LeRobot (GR00T)](#native-lerobot-integration)** | Official `make_env()` factory + GR00T Balance + Walk | [Live](https://miaodx.com/roboharness/g1-native-groot/) | `python examples/lerobot_g1_native.py --controller groot --report` |

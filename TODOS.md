@@ -49,30 +49,22 @@ This file captures deferred work from approved planning and review artifacts.
 - `showcase-repo-plan.md` remains the reviewed plan and rationale log, and both files
   now state that split explicitly.
 
-## 4. Extract a shared evidence contract only after a second stack needs it
+### Extract the shared evidence contract once a second stack needs it
 
-- What: Promote the phase-local evidence-pair resolver into a shared abstraction only
-  when another task or simulator genuinely needs the same contract.
-- Why: The approved CEO and engineering reviews both flagged premature extraction as
-  strategy debt.
-- Pros: Avoids calcifying a one-off example seam, keeps the first implementation
-  explicit, and forces the abstraction to be justified by a second concrete use case.
-- Cons: Leaves some local duplication in place for now and delays platform leverage.
-- Context: The approved plan locks phase 2 to example-local code and states the
-  extraction trigger explicitly.
-- Depends on / blocked by: A second task or stack proving it needs the same
-  `manifest-selected paired evidence` contract.
+- **Completed:** 2026-04-20
+- Moved the paired-evidence data model, bounded path resolver, and reusable lightbox
+  helpers into `src/roboharness/approval/evidence.py`.
+- The extraction is now justified by a second concrete consumer:
+  `examples/g1_cross_framework_report.py`, which renders the committed
+  `assets/g1/X36_Y28_Z13/` Meshcat vs MuJoCo proof bundle through the same paired-
+  evidence contract.
 
-## 7. Revisit freeform prompt-to-contract compilation only after presets prove out
+### Revisit prompt-to-contract compilation after presets prove out
 
-- What: Expand from template-first contract compilation to broader prompt-assisted
-  authoring only after the schema, error envelope, and wedge defaults prove themselves.
-- Why: The reviewed plan explicitly rejected open-ended NL-to-contract compilation as a
-  v1 bet. It is a later expansion, not part of the first trust loop.
-- Pros: Keeps the first wedge boring and reliable while preserving the longer-term
-  ambition.
-- Cons: Delays the most magical version of the product story.
-- Context: Deferred by the reviewed CEO and engineering phases in
-  `showcase-repo-plan.md`.
-- Depends on / blocked by: preset adoption, schema stability, and evidence that the
-  current wedge is already trustworthy.
+- **Completed:** 2026-04-20
+- The MuJoCo wedge now supports reviewed preset selection via
+  `--contract-preset mujoco_regression_v1|mujoco_migration_guarded_v1`.
+- It also supports constrained prompt-assisted authoring via `--contract-prompt`,
+  but only to choose among those grounded presets.
+- Open-ended visual or freeform NL rule authoring still fails closed and must use
+  explicit JSON until a broader compiler is genuinely warranted.

@@ -132,6 +132,16 @@ def test_validate_contract_rejects_missing_grounding() -> None:
     assert envelope["next_action"] == "Fix contract"
 
 
+def test_validate_contract_rejects_unknown_phase_grounding() -> None:
+    contract = build_default_contract(baseline_source="fixture")
+    contract["rules"][0]["evidence_at"][0]["phase"] = "bogus_phase"
+
+    with pytest.raises(ContractCompileError) as excinfo:
+        validate_contract(contract)
+
+    assert "unsupported phase" in excinfo.value.envelope.cause
+
+
 def test_evaluation_passes_when_current_run_matches_blessed_baseline() -> None:
     baseline = load_blessed_baseline()
 
@@ -144,6 +154,39 @@ def test_evaluation_passes_when_current_run_matches_blessed_baseline() -> None:
 
     assert result.verdict is Verdict.PASS
     assert result.failed == []
+
+
+def test_custom_contract_threshold_drives_evaluator_and_review_output() -> None:
+    baseline = load_blessed_baseline()
+    contract = build_default_contract(baseline_source="fixture")
+    for rule in contract["rules"]:
+        if rule["id"] == "all:loop_runtime_s":
+            rule["pass_if"]["value"] = 0.0
+            break
+    validate_contract(contract)
+
+    report = build_autonomous_report(
+        snapshot_metrics=copy.deepcopy(baseline["snapshot_metrics"]),
+        baseline_report=baseline,
+        baseline_source="fixture",
+    )
+    result = evaluate_autonomous_report(report, contract=contract)
+    alarms = build_alarms(report, result)
+    manifest = build_phase_manifest(report, result, alarms)
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=[],
+    )
+
+    assert result.verdict is Verdict.DEGRADED
+    assert approval_report["overall_verdict"] == "FAIL"
+    assert approval_report["summary"]["cases_surfaced"] == 1
+    assert approval_report["summary"]["cases_suppressed"] == 0
+    assert approval_report["surfaced_cases"][0]["rules"]["failed"] == ["all:loop_runtime_s"]
+    assert approval_report["user_action"]["needs_review"] is True
 
 
 def test_manifest_localizes_first_regression_to_approach() -> None:
@@ -276,6 +319,49 @@ def test_approval_report_suppresses_clean_case_when_run_matches_baseline() -> No
         "needs_review": False,
         "needs_baseline_blessing": False,
         "review_case_ids": [],
+    }
+
+
+def test_migration_pass_surfaces_intended_change_for_review() -> None:
+    baseline = load_blessed_baseline()
+    contract = build_default_contract(baseline_source="fixture")
+    contract["mode"] = "migration"
+    report = build_autonomous_report(
+        snapshot_metrics=copy.deepcopy(baseline["snapshot_metrics"]),
+        baseline_report=baseline,
+        baseline_source="fixture",
+    )
+    result = evaluate_autonomous_report(report, contract=contract)
+    alarms = build_alarms(report, result)
+    manifest = build_phase_manifest(report, result, alarms)
+
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=[],
+    )
+
+    assert result.verdict is Verdict.PASS
+    assert approval_report["overall_verdict"] == "PASS"
+    assert approval_report["run_state"] == "review_ready_migration"
+    assert approval_report["stop_reason"] == "awaiting_user_blessing"
+    assert approval_report["summary"] == {
+        "cases_total": 1,
+        "cases_surfaced": 1,
+        "cases_suppressed": 0,
+        "cases_unchanged": 0,
+        "reruns": 0,
+    }
+    assert approval_report["surfaced_cases"][0]["status"] == "INTENDED_CHANGE_CONFIRMED"
+    assert approval_report["surfaced_cases"][0]["material_reason"] == [
+        "intended_change_requires_review"
+    ]
+    assert approval_report["user_action"] == {
+        "needs_review": True,
+        "needs_baseline_blessing": True,
+        "review_case_ids": ["deterministic_mujoco_grasp"],
     }
 
 

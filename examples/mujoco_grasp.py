@@ -295,6 +295,7 @@ def main() -> None:
     evaluation_result = evaluate_autonomous_report(
         autonomous_report,
         report_path=str(report_path),
+        contract=contract,
     )
     alarms = build_alarms(autonomous_report, evaluation_result)
     manifest = build_phase_manifest(autonomous_report, evaluation_result, alarms)

@@ -17,6 +17,7 @@ from roboharness.evaluate.result import EvaluationResult, Operator, Severity
 
 try:
     from examples._mujoco_grasp_fixture import (
+        MUJOCO_GRASP_CAMERAS,
         MUJOCO_GRASP_PHASE_LABELS,
         MUJOCO_GRASP_PHASE_ORDER,
         MUJOCO_GRASP_PRIMARY_VIEWS,
@@ -24,6 +25,7 @@ try:
     )
 except ModuleNotFoundError:  # pragma: no cover - script execution path
     from _mujoco_grasp_fixture import (  # type: ignore[no-redef]
+        MUJOCO_GRASP_CAMERAS,
         MUJOCO_GRASP_PHASE_LABELS,
         MUJOCO_GRASP_PHASE_ORDER,
         MUJOCO_GRASP_PRIMARY_VIEWS,
@@ -151,6 +153,11 @@ MUJOCO_GRASP_ASSERTIONS = (
         phase="lift",
     ),
 )
+SUPPORTED_CONTRACT_PHASES = frozenset(["all", *MUJOCO_GRASP_PHASE_ORDER])
+_DEFAULT_ASSERTION_BY_CONTRACT_KEY = {
+    ("all" if assertion.phase == "*" else assertion.phase, assertion.metric): assertion
+    for assertion in MUJOCO_GRASP_ASSERTIONS
+}
 
 
 @dataclass
@@ -391,6 +398,15 @@ def validate_contract(contract: dict[str, Any]) -> None:
     supported_metrics = {assertion.metric for assertion in MUJOCO_GRASP_ASSERTIONS}
     for rule in rules:
         rule_id = rule.get("id", "<missing-id>")
+        rule_type = rule.get("type")
+        if rule_type != "metric_gate":
+            raise _contract_error(
+                cause=(
+                    f"rule '{rule_id}' uses type {rule_type!r}. The MuJoCo wedge grounds only "
+                    "metric_gate rules today."
+                ),
+                fix="Use metric_gate rules for this wedge or fall back to the default preset.",
+            )
         judge = rule.get("judge")
         if judge != "metric":
             raise _contract_error(
@@ -407,11 +423,37 @@ def validate_contract(contract: dict[str, Any]) -> None:
                 cause=f"rule '{rule_id}' is missing a non-empty evidence_at list.",
                 fix="Add at least one phase grounding to evidence_at.",
             )
+        if len(evidence_at) != 1:
+            raise _contract_error(
+                cause=(
+                    f"rule '{rule_id}' declares {len(evidence_at)} evidence locations. "
+                    "The current MuJoCo wedge supports exactly one grounded location per rule."
+                ),
+                fix="Use one evidence_at entry per rule for this wedge.",
+            )
         for location in evidence_at:
             if not isinstance(location, dict) or not location.get("phase"):
                 raise _contract_error(
                     cause=f"rule '{rule_id}' has an invalid evidence_at entry: {location!r}.",
                     fix="Each evidence_at entry needs at least a phase string.",
+                )
+            phase_id = location["phase"]
+            if phase_id not in SUPPORTED_CONTRACT_PHASES:
+                raise _contract_error(
+                    cause=(
+                        f"rule '{rule_id}' references unsupported phase {phase_id!r}. "
+                        f"Supported phases: {sorted(SUPPORTED_CONTRACT_PHASES)!r}."
+                    ),
+                    fix="Use one of the wedge's known phase ids or 'all' for summary metrics.",
+                )
+            view_name = location.get("view")
+            if view_name is not None and view_name not in MUJOCO_GRASP_CAMERAS:
+                raise _contract_error(
+                    cause=(
+                        f"rule '{rule_id}' references unsupported view {view_name!r}. "
+                        f"Supported views: {MUJOCO_GRASP_CAMERAS!r}."
+                    ),
+                    fix="Use one of the MuJoCo wedge camera names for evidence_at.view.",
                 )
 
         pass_if = rule.get("pass_if")
@@ -429,6 +471,51 @@ def validate_contract(contract: dict[str, Any]) -> None:
                 ),
                 fix="Use one of the wedge's supported evaluator metrics or omit --contract-json.",
             )
+        _contract_operator(rule_id, pass_if.get("op"))
+        _contract_threshold(rule_id, pass_if.get("op"), pass_if.get("value"))
+        phase_id = evidence_at[0]["phase"]
+        if _contract_assertion_template(metric, phase_id) is None:
+            raise _contract_error(
+                cause=(
+                    f"rule '{rule_id}' cannot be grounded to the MuJoCo wedge evaluator for "
+                    f"phase {phase_id!r} and metric {metric!r}."
+                ),
+                fix=(
+                    "Use the phase/metric combinations from the reviewed preset, or omit "
+                    "--contract-json to use the default contract."
+                ),
+            )
+
+
+def contract_assertions(contract: dict[str, Any]) -> tuple[MetricAssertion, ...]:
+    """Compile the validated contract into the assertion set used by the evaluator."""
+    assertions: list[MetricAssertion] = []
+    for rule in contract["rules"]:
+        pass_if = rule["pass_if"]
+        phase_id = rule["evidence_at"][0]["phase"]
+        template = _contract_assertion_template(pass_if["metric"], phase_id)
+        if template is None:
+            raise _contract_error(
+                cause=(
+                    f"rule '{rule.get('id', '<missing-id>')}' no longer matches the "
+                    "MuJoCo wedge evaluator."
+                ),
+                fix="Recompile the contract against the current wedge schema.",
+            )
+        assertions.append(
+            MetricAssertion(
+                metric=template.metric,
+                operator=_contract_operator(rule.get("id", "<missing-id>"), pass_if["op"]),
+                threshold=_contract_threshold(
+                    rule.get("id", "<missing-id>"),
+                    pass_if["op"],
+                    pass_if["value"],
+                ),
+                severity=template.severity,
+                phase=template.phase,
+            )
+        )
+    return tuple(assertions)
 
 
 def build_approval_report(
@@ -442,11 +529,16 @@ def build_approval_report(
     """Build the single-case approval artifact returned by the MuJoCo wedge."""
     case_id = str(report.get("case_id", "deterministic_mujoco_grasp"))
     evidence_state = _summary_evidence_state(manifest, evidence_pairs)
-    overall_verdict = _approval_overall_verdict(evaluation_result, evidence_state)
+    overall_verdict = _approval_overall_verdict(
+        evaluation_result,
+        evidence_state,
+        has_ungrounded_rules=bool(_ungrounded_rule_ids(contract, evaluation_result)),
+    )
     surfaced_cases: list[dict[str, Any]] = []
     suppressed_cases: list[dict[str, Any]] = []
+    is_migration_review = contract.get("mode") == "migration" and overall_verdict == "PASS"
 
-    if overall_verdict == "PASS":
+    if overall_verdict == "PASS" and not is_migration_review:
         suppressed_cases.append(
             {
                 "case_id": case_id,
@@ -472,6 +564,7 @@ def build_approval_report(
         overall_verdict=overall_verdict,
         evidence_state=evidence_state,
         surfaced_cases=surfaced_cases,
+        mode=contract["mode"],
     )
     needs_baseline_blessing = (
         contract.get("mode") == "migration" and overall_verdict == "PASS" and bool(surfaced_cases)
@@ -482,7 +575,12 @@ def build_approval_report(
         "contract_id": contract["contract_id"],
         "mode": contract["mode"],
         "overall_verdict": overall_verdict,
-        "stop_reason": _build_stop_reason(overall_verdict, evidence_state),
+        "stop_reason": _build_stop_reason(
+            overall_verdict,
+            evidence_state,
+            mode=contract["mode"],
+            surfaced_cases=surfaced_cases,
+        ),
         "run_state": run_state,
         "run_state_title": run_title,
         "run_state_message": run_message,
@@ -675,9 +773,11 @@ def evaluate_autonomous_report(
     report: dict[str, Any],
     *,
     report_path: str = "",
+    contract: dict[str, Any] | None = None,
 ) -> EvaluationResult:
     """Evaluate the MuJoCo wedge report using one shared verdict path."""
-    return AssertionEngine(MUJOCO_GRASP_ASSERTIONS).evaluate(report, report_path=report_path)
+    assertions = contract_assertions(contract) if contract is not None else MUJOCO_GRASP_ASSERTIONS
+    return AssertionEngine(assertions).evaluate(report, report_path=report_path)
 
 
 def build_alarms(report: dict[str, Any], evaluation_result: EvaluationResult) -> list[AlarmRecord]:
@@ -1212,7 +1312,11 @@ def _contract_error(*, cause: str, fix: str) -> ContractCompileError:
 def _approval_overall_verdict(
     evaluation_result: EvaluationResult,
     evidence_state: str,
+    *,
+    has_ungrounded_rules: bool,
 ) -> str:
+    if has_ungrounded_rules:
+        return "CONTRACT_INVALID"
     if evidence_state == "FAIL/ambiguous still-image evidence":
         return "AMBIGUOUS"
     if evaluation_result.verdict.value == "pass":
@@ -1225,7 +1329,26 @@ def _build_run_state(
     overall_verdict: str,
     evidence_state: str,
     surfaced_cases: list[dict[str, Any]],
+    mode: str,
 ) -> tuple[str, str, str]:
+    if overall_verdict == "CONTRACT_INVALID":
+        return (
+            "contract_invalid",
+            "Contract invalid",
+            (
+                "The compiled contract does not match the current MuJoCo wedge. "
+                "Do not trust or bless this run."
+            ),
+        )
+    if overall_verdict == "PASS" and surfaced_cases and mode == "migration":
+        return (
+            "review_ready_migration",
+            "Review intended change",
+            (
+                "Contract rules passed, but migration runs still require review "
+                "against the old baseline before blessing a new one."
+            ),
+        )
     if overall_verdict == "PASS" and not surfaced_cases:
         return (
             "review_ready_success",
@@ -1251,7 +1374,17 @@ def _build_run_state(
     )
 
 
-def _build_stop_reason(overall_verdict: str, evidence_state: str) -> str:
+def _build_stop_reason(
+    overall_verdict: str,
+    evidence_state: str,
+    *,
+    mode: str,
+    surfaced_cases: list[dict[str, Any]],
+) -> str:
+    if overall_verdict == "CONTRACT_INVALID":
+        return "contract_invalid"
+    if overall_verdict == "PASS" and mode == "migration" and surfaced_cases:
+        return "awaiting_user_blessing"
     if overall_verdict == "PASS":
         return "all_rules_satisfied"
     if overall_verdict == "AMBIGUOUS":
@@ -1294,7 +1427,7 @@ def _build_surfaced_case(
     return {
         "case_id": case_id,
         "status": _surfaced_case_status(contract["mode"], overall_verdict),
-        "material_reason": _material_reasons(overall_verdict, evidence_state),
+        "material_reason": _material_reasons(contract["mode"], overall_verdict, evidence_state),
         "proof_panel": {
             "phase_id": proof_pair.phase_id if proof_pair is not None else manifest.failed_phase_id,
             "view": proof_pair.view_name if proof_pair is not None else None,
@@ -1371,6 +1504,8 @@ def _build_metric_observations(
 
 
 def _surfaced_case_status(mode: str, overall_verdict: str) -> str:
+    if overall_verdict == "CONTRACT_INVALID":
+        return "CONTRACT_INVALID"
     if overall_verdict == "AMBIGUOUS":
         return "AMBIGUOUS"
     if mode == "migration" and overall_verdict == "PASS":
@@ -1378,9 +1513,13 @@ def _surfaced_case_status(mode: str, overall_verdict: str) -> str:
     return "REGRESSION"
 
 
-def _material_reasons(overall_verdict: str, evidence_state: str) -> list[str]:
+def _material_reasons(mode: str, overall_verdict: str, evidence_state: str) -> list[str]:
+    if overall_verdict == "CONTRACT_INVALID":
+        return ["contract_invalid"]
     if overall_verdict == "AMBIGUOUS":
         return ["visual_intent_unclear"]
+    if mode == "migration" and overall_verdict == "PASS":
+        return ["intended_change_requires_review"]
     if evidence_state == "FAIL/partial evidence":
         return ["hard_metric_failed", "partial_evidence"]
     if evidence_state == "FAIL/empty evidence":
@@ -1388,6 +1527,75 @@ def _material_reasons(overall_verdict: str, evidence_state: str) -> list[str]:
     if evidence_state == "FAIL/manifest mismatch":
         return ["hard_metric_failed", "evidence_contract_mismatch"]
     return ["hard_metric_failed"]
+
+
+def _contract_assertion_template(metric: Any, phase_id: Any) -> MetricAssertion | None:
+    if not isinstance(metric, str) or not isinstance(phase_id, str):
+        return None
+    return _DEFAULT_ASSERTION_BY_CONTRACT_KEY.get((phase_id, metric))
+
+
+def _contract_operator(rule_id: str, op_value: Any) -> Operator:
+    if not isinstance(op_value, str):
+        raise _contract_error(
+            cause=f"rule '{rule_id}' is missing a valid pass_if.op string.",
+            fix="Set pass_if.op to one of the wedge's supported operators.",
+        )
+    try:
+        return Operator(op_value)
+    except ValueError as exc:
+        raise _contract_error(
+            cause=f"rule '{rule_id}' uses unsupported operator {op_value!r}.",
+            fix=f"Use one of {[operator.value for operator in Operator]!r}.",
+        ) from exc
+
+
+def _contract_threshold(
+    rule_id: str,
+    op_value: Any,
+    threshold_value: Any,
+) -> float | tuple[float, float]:
+    operator = _contract_operator(rule_id, op_value)
+    if operator == Operator.IN_RANGE:
+        if (
+            not isinstance(threshold_value, (list, tuple))
+            or len(threshold_value) != 2
+            or any(
+                not isinstance(value, (int, float)) or isinstance(value, bool)
+                for value in threshold_value
+            )
+        ):
+            raise _contract_error(
+                cause=(
+                    f"rule '{rule_id}' must use a two-number pass_if.value for "
+                    f"operator {operator.value!r}."
+                ),
+                fix="Set pass_if.value to [low, high] for in_range rules.",
+            )
+        return (float(threshold_value[0]), float(threshold_value[1]))
+    if not isinstance(threshold_value, (int, float)) or isinstance(threshold_value, bool):
+        raise _contract_error(
+            cause=f"rule '{rule_id}' must use a numeric pass_if.value.",
+            fix="Set pass_if.value to a number for this operator.",
+        )
+    return float(threshold_value)
+
+
+def _ungrounded_rule_ids(
+    contract: dict[str, Any],
+    evaluation_result: EvaluationResult,
+) -> list[str]:
+    result_lookup = {
+        ("all" if result.phase == "*" else result.phase, result.metric): result
+        for result in evaluation_result.results
+    }
+    missing: list[str] = []
+    for rule in contract["rules"]:
+        pass_if = rule.get("pass_if", {})
+        phase_id = rule.get("evidence_at", [{}])[0].get("phase", "all")
+        if (phase_id, pass_if.get("metric")) not in result_lookup:
+            missing.append(rule.get("id", "<missing-id>"))
+    return missing
 
 
 def _metric_title(metric: str) -> str:

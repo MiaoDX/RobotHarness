@@ -46,6 +46,8 @@ def test_generate_html_report_contains_responsive_table_and_meshcat_guards(tmp_p
     assert "min-width: 640px" in html
     assert "max-width: 480px" in html
     assert "flex-basis: 100%" in html
+    assert ".evidence-zoom-button" in html
+    assert ".image-lightbox" in html
 
 
 def test_build_summary_html_wraps_artifact_pack_table_for_small_screens() -> None:
@@ -95,3 +97,4 @@ def test_build_summary_html_wraps_artifact_pack_table_for_small_screens() -> Non
     )
 
     assert '<div class="table-scroll"><table class="meta-table">' in html
+    assert "image-lightbox" in html

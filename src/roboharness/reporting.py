@@ -487,6 +487,19 @@ def generate_html_report(
     color: #4b5563;
     margin-bottom: 8px;
   }}
+  .evidence-zoom-button {{
+    width: 100%;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: zoom-in;
+    border-radius: 8px;
+  }}
+  .evidence-zoom-button:focus-visible {{
+    outline: 3px solid #1d4ed8;
+    outline-offset: 3px;
+  }}
   .evidence-figure img {{ width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px;
                          border: 1px solid #d1d5db; background: #e5e7eb; }}
   .evidence-figure figcaption {{
@@ -504,6 +517,130 @@ def generate_html_report(
                  line-height: 1.4; }}
   .evidence-caption, .evidence-diagnostic {{ margin: 12px 0 0; line-height: 1.5; }}
   .evidence-diagnostic {{ color: #92400e; }}
+  .temporal-evidence {{
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+  }}
+  .temporal-evidence-head strong {{ display: block; color: #0f172a; }}
+  .temporal-evidence-head p {{
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.5;
+  }}
+  .temporal-row {{ margin-top: 12px; }}
+  .temporal-row-head {{
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+  }}
+  .temporal-grid {{
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  }}
+  .temporal-figure {{ margin: 0; }}
+  .temporal-frame-label {{
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+  }}
+  .temporal-figure img {{
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    background: #e5e7eb;
+  }}
+  .temporal-figure figcaption {{
+    margin-top: 6px;
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.4;
+  }}
+  .temporal-placeholder {{
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed #f59e0b;
+    border-radius: 8px;
+    background: #fffbeb;
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 700;
+  }}
+  body.lightbox-open {{ overflow: hidden; }}
+  .image-lightbox {{
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+  }}
+  .image-lightbox[hidden] {{ display: none; }}
+  .image-lightbox-backdrop {{
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.82);
+  }}
+  .image-lightbox-dialog {{
+    position: relative;
+    width: min(92vw, 1040px);
+    max-height: 92vh;
+    overflow: auto;
+    border-radius: 12px;
+    padding: 16px;
+    background: white;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.4);
+  }}
+  .image-lightbox-toolbar {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }}
+  .image-lightbox-kicker {{
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+  }}
+  .image-lightbox-close {{
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 14px;
+    background: #e2e8f0;
+    color: #0f172a;
+    font-weight: 700;
+    cursor: pointer;
+  }}
+  .image-lightbox-close:focus-visible {{
+    outline: 3px solid #1d4ed8;
+    outline-offset: 3px;
+  }}
+  .image-lightbox-image {{
+    width: 100%;
+    max-height: 72vh;
+    object-fit: contain;
+    border-radius: 8px;
+    background: #0f172a;
+  }}
+  .image-lightbox-caption {{
+    margin: 12px 0 0;
+    color: #334155;
+    line-height: 1.5;
+  }}
   @media (max-width: 860px) {{
     .evidence-compare-grid {{ grid-template-columns: 1fr; }}
     .meshcat-viewer {{ flex-basis: 100%; }}

@@ -1149,6 +1149,7 @@ def build_summary_html(
         f"{contract_section}"
         f"{baseline_section}"
         "</div>"
+        f"{_render_lightbox_shell()}"
     )
 
 
@@ -2136,6 +2137,7 @@ def _render_evidence_card(pair: EvidencePair) -> str:
         if pair.diagnostic_message
         else ""
     )
+    temporal_evidence = _render_temporal_evidence(pair)
     return (
         f'<article class="evidence-card evidence-card-{html.escape(pair.status)}">'
         '<div class="evidence-card-head">'
@@ -2148,6 +2150,7 @@ def _render_evidence_card(pair: EvidencePair) -> str:
         f"{_render_evidence_media(pair, role='Baseline')}"
         "</div>"
         f'<div class="evidence-chip-row">{chips}</div>'
+        f"{temporal_evidence}"
         f'<p class="evidence-caption">{html.escape(pair.interpretation_caption)}</p>'
         f"{diagnostic}"
         "</article>"
@@ -2169,13 +2172,12 @@ def _render_evidence_media(pair: EvidencePair, *, role: str) -> str:
     label = f"{role}"
     alt = f"{pair.phase_label} ({pair.phase_id}) {pair.view_name} {role.lower()} evidence"
     if image_path is not None and image_path.exists():
+        caption = f"{role} {pair.phase_label} / {pair.view_name}"
         return (
             '<figure class="evidence-figure">'
             f'<div class="evidence-role">{html.escape(label)}</div>'
-            f'<img src="{_image_data_uri(image_path)}" '
-            f'alt="{html.escape(alt)}" loading="lazy"/>'
-            f"<figcaption>{html.escape(role)} {html.escape(pair.phase_label)} / "
-            f"{html.escape(pair.view_name)}</figcaption>"
+            f"{_render_zoomable_image(image_path, alt=alt, caption=caption)}"
+            f"<figcaption>{html.escape(caption)}</figcaption>"
             "</figure>"
         )
     return (
@@ -2204,3 +2206,187 @@ def _image_data_uri(path: Path) -> str:
     mime = "image/png"
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{encoded}"
+
+
+def _render_temporal_evidence(pair: EvidencePair) -> str:
+    if pair.status != "ambiguous":
+        return ""
+    current_root = _image_root_from_path(pair.current_image_path)
+    baseline_root = _image_root_from_path(pair.baseline_image_path)
+    if current_root is None or baseline_root is None:
+        return ""
+    return (
+        '<div class="temporal-evidence">'
+        '<div class="temporal-evidence-head">'
+        "<strong>Temporal Evidence</strong>"
+        "<p>Checkpoint order adds motion context for this view. It is still not "
+        "continuous video.</p>"
+        "</div>"
+        f"{_render_temporal_row('Current checkpoints', current_root, pair.view_name, 'current')}"
+        f"{_render_temporal_row('Baseline checkpoints', baseline_root, pair.view_name, 'baseline')}"
+        "</div>"
+    )
+
+
+def _render_temporal_row(
+    title: str,
+    visual_root: Path,
+    view_name: str,
+    role: str,
+) -> str:
+    frames = "".join(
+        _render_temporal_frame(
+            visual_root=visual_root,
+            phase_id=phase_id,
+            view_name=view_name,
+            role=role,
+        )
+        for phase_id in MUJOCO_GRASP_PHASE_ORDER
+    )
+    return (
+        '<div class="temporal-row">'
+        f'<div class="temporal-row-head">{html.escape(title)}</div>'
+        f'<div class="temporal-grid">{frames}</div>'
+        "</div>"
+    )
+
+
+def _render_temporal_frame(
+    *,
+    visual_root: Path,
+    phase_id: str,
+    view_name: str,
+    role: str,
+) -> str:
+    phase_label = MUJOCO_GRASP_PHASE_LABELS[phase_id]
+    image_path = visual_root / phase_id / f"{view_name}_rgb.png"
+    alt = f"{role} {phase_label} ({phase_id}) {view_name} temporal evidence"
+    caption = f"{role.title()} {phase_label} / {view_name}"
+    if image_path.exists():
+        body = _render_zoomable_image(
+            image_path,
+            alt=alt,
+            caption=caption,
+            class_name="evidence-zoom-button temporal-zoom-button",
+        )
+    else:
+        body = (
+            f'<div class="temporal-placeholder" role="img" '
+            f'aria-label="{html.escape(caption)} missing">'
+            "Missing"
+            "</div>"
+        )
+    return (
+        '<figure class="temporal-figure">'
+        f'<div class="temporal-frame-label">{html.escape(phase_label)}</div>'
+        f"{body}"
+        f"<figcaption>{html.escape(caption)}</figcaption>"
+        "</figure>"
+    )
+
+
+def _image_root_from_path(path: Path | None) -> Path | None:
+    if path is None:
+        return None
+    parents = path.parents
+    if len(parents) < 2:
+        return None
+    return parents[1]
+
+
+def _render_zoomable_image(
+    image_path: Path,
+    *,
+    alt: str,
+    caption: str,
+    class_name: str = "evidence-zoom-button",
+) -> str:
+    image_src = _image_data_uri(image_path)
+    return (
+        f'<button type="button" class="{html.escape(class_name)}" '
+        f'aria-label="Expand {html.escape(caption)}" '
+        f'data-lightbox-caption="{html.escape(caption)}">'
+        f'<img src="{html.escape(image_src)}" alt="{html.escape(alt)}" loading="lazy"/>'
+        "</button>"
+    )
+
+
+def _render_lightbox_shell() -> str:
+    return "\n".join(
+        [
+            '<div class="image-lightbox" data-evidence-lightbox hidden aria-hidden="true">',
+            '  <div class="image-lightbox-backdrop" data-lightbox-close></div>',
+            '  <div class="image-lightbox-dialog" role="dialog" aria-modal="true"',
+            '       aria-labelledby="image-lightbox-title">',
+            '    <div class="image-lightbox-toolbar">',
+            '      <p class="image-lightbox-kicker" id="image-lightbox-title">'
+            "Expanded evidence</p>",
+            '      <button type="button" class="image-lightbox-close" '
+            "data-lightbox-close>Close</button>",
+            "    </div>",
+            '    <img class="image-lightbox-image" data-lightbox-image alt="" />',
+            '    <p class="image-lightbox-caption" data-lightbox-caption></p>',
+            "  </div>",
+            "</div>",
+            "<script>",
+            "(function () {",
+            "  if (window.__roboharnessEvidenceLightboxBound) {",
+            "    return;",
+            "  }",
+            "  window.__roboharnessEvidenceLightboxBound = true;",
+            '  var lightbox = document.querySelector("[data-evidence-lightbox]");',
+            "  if (!lightbox) {",
+            "    return;",
+            "  }",
+            '  var lightboxImage = lightbox.querySelector("[data-lightbox-image]");',
+            '  var lightboxCaption = lightbox.querySelector("[data-lightbox-caption]");',
+            '  var closeButton = lightbox.querySelector(".image-lightbox-close");',
+            "  var lastTrigger = null;",
+            "  function closeLightbox() {",
+            "    if (lightbox.hidden) {",
+            "      return;",
+            "    }",
+            "    lightbox.hidden = true;",
+            '    lightbox.setAttribute("aria-hidden", "true");',
+            '    document.body.classList.remove("lightbox-open");',
+            '    lightboxImage.removeAttribute("src");',
+            '    lightboxImage.setAttribute("alt", "");',
+            '    lightboxCaption.textContent = "";',
+            "    if (lastTrigger) {",
+            "      lastTrigger.focus();",
+            "      lastTrigger = null;",
+            "    }",
+            "  }",
+            '  document.addEventListener("click", function (event) {',
+            '    var trigger = event.target.closest(".evidence-zoom-button");',
+            "    if (trigger) {",
+            '      var triggerImage = trigger.querySelector("img");',
+            "      if (!triggerImage) {",
+            "        return;",
+            "      }",
+            "      event.preventDefault();",
+            "      lastTrigger = trigger;",
+            '      lightboxImage.setAttribute("src", triggerImage.getAttribute("src") || "");',
+            '      lightboxImage.setAttribute("alt", triggerImage.getAttribute("alt") || "");',
+            '      lightboxCaption.textContent = trigger.getAttribute("data-lightbox-caption")',
+            '        || triggerImage.getAttribute("alt") || "";',
+            "      lightbox.hidden = false;",
+            '      lightbox.setAttribute("aria-hidden", "false");',
+            '      document.body.classList.add("lightbox-open");',
+            "      closeButton.focus();",
+            "      return;",
+            "    }",
+            '    if (!lightbox.hidden && event.target.closest("[data-lightbox-close]")) {',
+            "      event.preventDefault();",
+            "      closeLightbox();",
+            "    }",
+            "  });",
+            '  document.addEventListener("keydown", function (event) {',
+            '    if (event.key === "Escape" && !lightbox.hidden) {',
+            "      closeLightbox();",
+            "    }",
+            "  });",
+            "})();",
+            "</script>",
+        ]
+    )

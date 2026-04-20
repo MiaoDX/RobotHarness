@@ -13,10 +13,18 @@ The core wedge is:
 
 `long unattended agent run -> one proof pack -> short human review`
 
-The current proving ground is the deterministic MuJoCo grasp loop. From a repo
-checkout, one command gets back a compiled contract, metric-backed alarms, a
-phase manifest, an approval report, and an HTML proof surface that tells you
-what changed and what to do next.
+The proving ground starts with the deterministic MuJoCo grasp loop, but the
+same proof surface also works for humanoid runs across multiple frameworks.
+From a repo checkout, one command gets back a compiled contract,
+metric-backed alarms, a phase manifest, an approval report, and an HTML proof
+surface that tells you what changed and what to do next.
+
+![Unitree G1 humanoid demo rendered side by side in Meshcat and MuJoCo](assets/g1/X36_Y28_Z13/g1_meshcat_mujoco_comparison.gif)
+
+This README preview uses the kept review angles from the same G1 humanoid run:
+Meshcat front-to-back on the left and MuJoCo top-down on the right. Each frame
+keeps its phase name visible so you can compare humanoid behavior across
+frameworks without opening the full report first.
 
 ## Choose Your Start
 
@@ -115,7 +123,9 @@ The first screen is meant to be actionable without replay:
 - **Run Decision** tells you whether the run is clean, reviewable, or degraded
 - **Approval Queue** shows changed or ambiguous cases only
 - **Current vs Baseline** shows the first manifest-selected proof pair
+- **Temporal Evidence** appears for ambiguous still-image cases as a checkpoint-ordered strip
 - **Hard Metric Results** shows the evaluator-backed failures
+- Evidence images support click-to-zoom for quick inspection without dropping into the gallery
 - **Phase Timeline** and the deeper checkpoint gallery stay available below the fold
 
 | pre_grasp | contact | grasp | lift |

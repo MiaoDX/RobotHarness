@@ -2,38 +2,6 @@
 
 This file captures deferred work from approved planning and review artifacts.
 
-## 1. Add temporal evidence when still images are ambiguous
-
-- What: Add a short clip, scrubber, or temporal overlay for failure cases where paired
-  still images are suggestive but not decisive.
-- Why: The approved phase-2 plan explicitly keeps still-image evidence as the first
-  wedge, but some motion-rooted failures will remain under-explained.
-- Pros: Improves trust for trajectory and timing regressions, reduces false confidence
-  from a single frame, and strengthens the agent rerun loop.
-- Cons: Adds asset weight, UI complexity, and new decisions about encoding, playback,
-  and report portability.
-- Context: Deferred by the approved review in
-  `docs/designs/mujoco-alarmed-grasp-loop-phase-2-plan-reviewed.md`. The current plan
-  already introduces an explicit `ambiguous still-image evidence` state so this work
-  has a clear trigger.
-- Depends on / blocked by: Phase 2 implementation landing first, plus at least one real
-  ambiguous failure observed in MuJoCo or a second stack.
-
-## 2. Add click-to-zoom or lightbox support for evidence cards
-
-- What: Let users enlarge the new phase-2 comparison cards without dropping into the
-  deeper checkpoint gallery.
-- Why: The approved plan keeps evidence cards passive to stay wedge-tight, but detailed
-  image inspection may still benefit from a lighter-weight zoom path.
-- Pros: Faster visual inspection, better use of the new evidence cards, less context
-  switching between summary and gallery.
-- Cons: Broadens the UI surface, adds focus/keyboard/a11y work, and duplicates some of
-  the value of the existing checkpoint gallery.
-- Context: Explicitly deferred in the approved design review because the deeper gallery
-  already exists and the phase-2 bottleneck is proof ordering, not interaction chrome.
-- Depends on / blocked by: Phase 2 evidence cards shipping first and proving useful
-  enough to justify a richer interaction.
-
 ## Completed
 
 ### Sync README and docs to the new evidence contract
@@ -58,6 +26,28 @@ This file captures deferred work from approved planning and review artifacts.
   `ambiguous` cases for the MuJoCo wedge.
 - The corpus locks surfaced-case precision `1.0`, surfaced-case recall `1.0`, and the
   trust boundary that ambiguous still-image evidence must stay review-required.
+
+### Add temporal evidence when still images are ambiguous
+
+- **Completed:** 2026-04-20
+- Ambiguous MuJoCo wedge cases now render checkpoint-ordered temporal evidence strips
+  in the approval report.
+- The first implementation stays wedge-tight: it adds phase-ordered visual context
+  without introducing a full clip or video pipeline.
+
+### Add click-to-zoom or lightbox support for evidence cards
+
+- **Completed:** 2026-04-20
+- Evidence cards and temporal thumbnails now expand in-place with a keyboard-closeable
+  lightbox instead of forcing users into the deeper checkpoint gallery.
+
+### Split the canonical spec from the review log once implementation starts
+
+- **Completed:** 2026-04-20
+- `docs/designs/unattended-refactor-harness-v1.md` is the canonical product/design
+  contract.
+- `showcase-repo-plan.md` remains the reviewed plan and rationale log, and both files
+  now state that split explicitly.
 
 ## 4. Extract a shared evidence contract only after a second stack needs it
 
@@ -86,16 +76,3 @@ This file captures deferred work from approved planning and review artifacts.
   `showcase-repo-plan.md`.
 - Depends on / blocked by: preset adoption, schema stability, and evidence that the
   current wedge is already trustworthy.
-
-## 8. Split the canonical spec from the review log once implementation starts
-
-- What: Separate the clean product/design contract from the long `/autoplan` review log
-  so implementers have one concise spec artifact to follow.
-- Why: The design and DX reviews both flagged that the current plan file is becoming a
-  mix of accepted product truth and review commentary.
-- Pros: Reduces implementation ambiguity, makes handoff cleaner, and keeps the repo's
-  canonical design artifacts easier to maintain.
-- Cons: Creates one more artifact to keep current.
-- Context: Deferred by the reviewed design phase in `showcase-repo-plan.md`.
-- Depends on / blocked by: final approval of the reviewed plan, then the start of the
-  implementation pass.

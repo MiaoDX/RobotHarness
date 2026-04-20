@@ -3,6 +3,11 @@
 
 Status: APPROVED via `/autoplan` on 2026-04-18. Draft rewritten on 2026-04-17 from the earlier showcase-split plan.
 
+Canonical product/design contract: `docs/designs/unattended-refactor-harness-v1.md`
+
+This file remains the reviewed plan, rationale log, and deferred-work record for the
+approved direction.
+
 This document replaces the previous strategy of aggressively moving advanced demos
 out of the core repo. The CEO review and follow-up discussion found that repo
 cleanliness is not the real bottleneck. Trust is.

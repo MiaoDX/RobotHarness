@@ -1,6 +1,6 @@
 """Roboharness: A Visual Testing Harness for AI Coding Agents in Robot Simulation."""
 
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 
 from roboharness.core.capture import CaptureResult
 from roboharness.core.checkpoint import Checkpoint, CheckpointStore

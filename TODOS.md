@@ -43,6 +43,14 @@ This file captures deferred work from approved planning and review artifacts.
   example explains the paired-evidence summary, explicit evidence states, the
   `failed phase -> proof -> rerun` loop, and the current contributor verification flow.
 
+### Run post-implementation boomerang reviews
+
+- **Completed:** 2026-04-20
+- Repo-local boomerang review is mirrored in
+  `docs/designs/unattended-refactor-harness-boomerang-review-20260420.md`.
+- Outcome: the report design contract held, but the README front door needed an honest
+  split between package-first integration and the repo-only MuJoCo wedge demo.
+
 ## 4. Extract a shared evidence contract only after a second stack needs it
 
 - What: Promote the phase-local evidence-pair resolver into a shared abstraction only
@@ -56,20 +64,6 @@ This file captures deferred work from approved planning and review artifacts.
   extraction trigger explicitly.
 - Depends on / blocked by: A second task or stack proving it needs the same
   `manifest-selected paired evidence` contract.
-
-## 5. Run post-implementation boomerang reviews
-
-- What: Run visual and developer-experience follow-up reviews after phase 2 is
-  implemented.
-- Why: The approved plan now makes concrete claims about first-viewport proof, headless
-  usability, and time-to-understanding. Those claims should be checked against reality.
-- Pros: Confirms the plan survived implementation, catches visual drift, and validates
-  whether the live loop is actually easier to use.
-- Cons: More review time after the code lands.
-- Context: Recommended by the approved design and DX sections as the right way to
-  validate the artifact after shipping, not before.
-- Depends on / blocked by: Phase 2 implementation landing. Suggested follow-ups are
-  `/design-review` and `/devex-review`.
 
 ## 6. Build a seeded evaluator corpus before treating the queue as trustworthy
 

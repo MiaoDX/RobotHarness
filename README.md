@@ -13,14 +13,37 @@ The core wedge is:
 
 `long unattended agent run -> one proof pack -> short human review`
 
-The current proving ground is the deterministic MuJoCo grasp loop. Run one command,
-get back a compiled contract, metric-backed alarms, a phase manifest, an approval
-report, and an HTML proof surface that tells you what changed and what to do next.
+The current proving ground is the deterministic MuJoCo grasp loop. From a repo
+checkout, one command gets back a compiled contract, metric-backed alarms, a
+phase manifest, an approval report, and an HTML proof surface that tells you
+what changed and what to do next.
 
-## 10-Minute MuJoCo Wedge
+## Choose Your Start
+
+### Package-First Integration
+
+Use this when you are adding roboharness to an existing codebase. The published
+wheel installs the library and the `roboharness` CLI, not the repo's
+`examples/` directory.
 
 ```bash
-pip install roboharness[demo]
+pip install roboharness
+roboharness --help
+```
+
+The fastest honest package path is the zero-change Gymnasium wrapper shown in
+[Gymnasium Wrapper (Zero-Change Integration)](#gymnasium-wrapper-zero-change-integration).
+If you want to evaluate the maintained MuJoCo approval wedge itself, use a repo
+checkout.
+
+### Repo Demo: 10-Minute MuJoCo Wedge
+
+This path exercises the shipped MuJoCo approval wedge from this repository.
+
+```bash
+git clone https://github.com/MiaoDX/RobotHarness.git
+cd RobotHarness
+python -m pip install -e ".[demo]"
 python examples/mujoco_grasp.py --report
 ```
 
@@ -77,7 +100,8 @@ pip install roboharness[dev]             # test/lint/type deps
 
 ## Progressive Disclosure
 
-- Preset-first: run `python examples/mujoco_grasp.py --report`
+- Package-first: wire the wrapper or `Harness` API into your existing codebase
+- Repo demo: from a clone of this repo, run `python examples/mujoco_grasp.py --report`
 - Advanced: pass `--contract-json /path/to/contract.json` to validate a pre-authored
   contract before the wedge starts
 

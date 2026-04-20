@@ -1,7 +1,9 @@
 # Unattended Refactor Harness v1
 
 Date: 2026-04-17
-Status: Approved direction from CEO-review follow-up discussion
+Status: Canonical product/design contract. Approved direction from CEO-review follow-up discussion.
+
+`showcase-repo-plan.md` remains the reviewed strategy and rationale log for this direction.
 
 This document records the accepted product contract for unattended Claude/Codex
 refactor and migration runs in roboharness.

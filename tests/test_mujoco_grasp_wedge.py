@@ -57,6 +57,23 @@ def _build_known_bad_contract() -> tuple[dict[str, Any], Any, list[Any], Any]:
     return report, result, alarms, manifest
 
 
+def _build_ambiguous_contract() -> tuple[dict[str, Any], Any, list[Any], Any]:
+    baseline = load_blessed_baseline()
+    current = copy.deepcopy(baseline["snapshot_metrics"])
+    for phase_metrics in current.values():
+        phase_metrics["max_abs_qvel"] = 60.0
+
+    report = build_autonomous_report(
+        snapshot_metrics=current,
+        baseline_report=baseline,
+        baseline_source="fixture",
+    )
+    result = evaluate_autonomous_report(report)
+    alarms = build_alarms(report, result)
+    manifest = build_phase_manifest(report, result, alarms)
+    return report, result, alarms, manifest
+
+
 def _build_review_bundle() -> tuple[dict[str, Any], dict[str, Any], Any, list[Any], Any, list[Any]]:
     report, result, alarms, manifest = _build_known_bad_contract()
     contract = build_default_contract(baseline_source="fixture")
@@ -383,6 +400,23 @@ def test_known_bad_fixture_resolves_two_ordered_evidence_pairs() -> None:
     assert [pair.status for pair in evidence_pairs] == ["full", "full"]
 
 
+def test_ambiguous_fixture_resolves_temporal_evidence_state() -> None:
+    report, result, _alarms, manifest = _build_ambiguous_contract()
+
+    evidence_pairs = resolve_evidence_pairs(
+        trial_dir=KNOWN_BAD_VISUAL_ROOT,
+        baseline_visual_root=BASELINE_VISUAL_ROOT,
+        manifest=manifest,
+        report=report,
+    )
+
+    assert result.verdict is Verdict.DEGRADED
+    assert manifest.failed_phase_id == "lift"
+    assert manifest.primary_views == ["side"]
+    assert [pair.view_name for pair in evidence_pairs] == ["side"]
+    assert [pair.status for pair in evidence_pairs] == ["ambiguous"]
+
+
 def test_summary_html_renders_current_vs_baseline_evidence_with_metric_copy() -> None:
     contract, approval_report, report, _result, alarms, evidence_pairs = _build_review_bundle()
     manifest = build_phase_manifest(report, evaluate_autonomous_report(report), alarms)
@@ -415,6 +449,42 @@ def test_summary_html_renders_current_vs_baseline_evidence_with_metric_copy() ->
     assert "Hard Metric Results" in html
     assert "Artifact Pack" in html
     assert "Phase Timeline" in html
+
+
+def test_summary_html_renders_temporal_evidence_and_lightbox_for_ambiguous_runs() -> None:
+    report, result, alarms, manifest = _build_ambiguous_contract()
+    contract = build_default_contract(baseline_source="fixture")
+    evidence_pairs = resolve_evidence_pairs(
+        trial_dir=KNOWN_BAD_VISUAL_ROOT,
+        baseline_visual_root=BASELINE_VISUAL_ROOT,
+        manifest=manifest,
+        report=report,
+    )
+    approval_report = build_approval_report(
+        contract=contract,
+        report=report,
+        evaluation_result=result,
+        manifest=manifest,
+        evidence_pairs=evidence_pairs,
+    )
+
+    html = build_summary_html(
+        report,
+        alarms,
+        manifest,
+        evidence_pairs,
+        contract=contract,
+        approval_report=approval_report,
+    )
+
+    assert "FAIL/ambiguous still-image evidence" in html
+    assert "Temporal Evidence" in html
+    assert "Checkpoint order adds motion context for this view." in html
+    assert "Current checkpoints" in html
+    assert "Baseline checkpoints" in html
+    assert "Expand Current lift / side" in html
+    assert "image-lightbox" in html
+    assert "Close" in html
 
 
 @pytest.mark.parametrize(

@@ -133,7 +133,7 @@ def _load_controller(name: str) -> Any:
             from roboharness.controllers.locomotion import GrootLocomotionController
 
             return GrootLocomotionController()
-        elif name == "sonic":
+        if name == "sonic":
             from roboharness.controllers.locomotion import SonicLocomotionController
 
             return SonicLocomotionController()

@@ -175,18 +175,17 @@ class MeshcatVisualizer:
 
         if geom_type == _PLANE:
             return g.Box([2.0, 2.0, 0.001])
-        elif geom_type == _SPHERE:
+        if geom_type == _SPHERE:
             return g.Sphere(float(size[0]))
-        elif geom_type in (_CAPSULE, _CYLINDER):
+        if geom_type in (_CAPSULE, _CYLINDER):
             radius = float(size[0])
             half_length = float(size[1])
             return g.Cylinder(2 * half_length, radius)
-        elif geom_type == _BOX:
+        if geom_type == _BOX:
             return g.Box([2 * float(size[0]), 2 * float(size[1]), 2 * float(size[2])])
-        elif geom_type == _MESH and geom_id >= 0:
+        if geom_type == _MESH and geom_id >= 0:
             return self._make_mesh_geometry(geom_id)
-        else:
-            return None
+        return None
 
     def _make_mesh_geometry(self, geom_id: int) -> Any:
         """Extract mesh vertices/faces from MuJoCo model for a mesh geom."""

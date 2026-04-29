@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="980" viewBox="0 0 1440 980" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1440" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F3EA"/>
+      <stop offset="1" stop-color="#EEF4FB"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F8FAFC"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#102A43" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title { font: 700 48px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #102A43; }
+      .subtitle { font: 500 22px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #486581; }
+      .cardTitle { font: 700 24px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #102A43; }
+      .score { font: 700 24px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #7C2D12; }
+      .body { font: 500 18px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #334E68; }
+      .badge { font: 700 18px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #102A43; }
+      .footer { font: 700 20px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #243B53; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="980" fill="url(#bg)"/>
+
+  <text x="84" y="96" class="title">按落地赛五维看 Roboharness</text>
+  <text x="84" y="136" class="subtitle">让评委扫一眼就知道：这个项目在哪些维度强，证据落在哪里</text>
+
+  <g filter="url(#shadow)">
+    <rect x="78" y="184" width="398" height="220" rx="28" fill="url(#card)"/>
+    <rect x="104" y="212" width="140" height="42" rx="14" fill="#FDE68A"/>
+    <text x="132" y="239" class="score">20 分</text>
+    <text x="104" y="286" class="cardTitle">需求匹配度</text>
+    <text x="104" y="324" class="body">真实痛点不是“AI 会不会写代码”，</text>
+    <text x="104" y="352" class="body">而是“AI 跑了 6 小时，工程师敢不敢离开屏幕”。</text>
+    <text x="104" y="386" class="badge">证据：问题定义 + 工作流前后对比</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="522" y="184" width="398" height="220" rx="28" fill="url(#card)"/>
+    <rect x="548" y="212" width="140" height="42" rx="14" fill="#FCA5A5"/>
+    <text x="576" y="239" class="score">25 分</text>
+    <text x="548" y="286" class="cardTitle">落地可行性</text>
+    <text x="548" y="324" class="body">公开 demo、PyPI、复现命令、HTML report、</text>
+    <text x="548" y="352" class="body">CI、evidence pack 都已经在跑。</text>
+    <text x="548" y="386" class="badge">证据：grasp demo + LeRobot eval plugin</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="966" y="184" width="398" height="220" rx="28" fill="url(#card)"/>
+    <rect x="992" y="212" width="140" height="42" rx="14" fill="#C7D2FE"/>
+    <text x="1020" y="239" class="score">25 分</text>
+    <text x="992" y="286" class="cardTitle">业务价值</text>
+    <text x="992" y="324" class="body">核心卖点是人时 ROI：6h 盯屏 → 3min 审批。</text>
+    <text x="992" y="352" class="body">适合机器人团队的长重构、回归和验收流程。</text>
+    <text x="992" y="386" class="badge">证据：ROI 估算 + 场景 A/B/C/D</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="78" y="446" width="620" height="240" rx="28" fill="url(#card)"/>
+    <rect x="104" y="474" width="140" height="42" rx="14" fill="#99F6E4"/>
+    <text x="132" y="501" class="score">15 分</text>
+    <text x="104" y="548" class="cardTitle">用户体验</text>
+    <text x="104" y="586" class="body">工程师不再盯所有 case，只看 surfaced cases。</text>
+    <text x="104" y="614" class="body">而且给了 5 分钟自助验证路径，评委也能自己验证。</text>
+    <text x="104" y="650" class="badge">证据：Run Decision / Approval Queue / 5 分钟验证</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="742" y="446" width="622" height="240" rx="28" fill="url(#card)"/>
+    <rect x="768" y="474" width="140" height="42" rx="14" fill="#F9A8D4"/>
+    <text x="796" y="501" class="score">15 分</text>
+    <text x="768" y="548" class="cardTitle">可复用性</text>
+    <text x="768" y="586" class="body">不是单个 demo，而是一层 approval harness：</text>
+    <text x="768" y="614" class="body">MuJoCo / G1 / LeRobot / CI 插件 / contract preset。</text>
+    <text x="768" y="650" class="badge">证据：多后端 demo + LeRobot plugin + contract 模型</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="78" y="730" width="1286" height="166" rx="30" fill="#102A43"/>
+    <text x="118" y="786" class="footer" fill="#F8FAFC">评委看这个项目，最重要的不是它“会不会动”，而是：</text>
+    <text x="118" y="824" class="footer" fill="#F8FAFC">它能不能把机器人团队里最贵的那部分人工审查时间，压缩成可复核、可回放、可 bless 的最后 3 分钟。</text>
+    <text x="118" y="860" class="footer" fill="#D9E2EC">高分维度都应该能指回具体证据：公开 demo、命令、报告、文件名、CI 门槛、真实案例。</text>
+  </g>
+</svg>

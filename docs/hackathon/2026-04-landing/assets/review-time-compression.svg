@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1440" y2="960" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F5EFE6"/>
+      <stop offset="1" stop-color="#EDF6F1"/>
+    </linearGradient>
+    <linearGradient id="leftCard" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFF5F1"/>
+      <stop offset="1" stop-color="#FDE8E8"/>
+    </linearGradient>
+    <linearGradient id="rightCard" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#EFFCF6"/>
+      <stop offset="1" stop-color="#D9FBEA"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#102A43" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title { font: 700 50px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #102A43; }
+      .subtitle { font: 500 24px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #486581; }
+      .cardTitle { font: 700 28px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #102A43; }
+      .body { font: 500 20px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #334E68; }
+      .mono { font: 700 24px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #102A43; }
+      .metric { font: 700 42px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #0B1F33; }
+      .step { font: 700 18px 'SFMono-Regular','Menlo','Consolas',monospace; fill: #102A43; }
+      .badge { font: 700 18px 'PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="960" fill="url(#bg)"/>
+
+  <text x="84" y="94" class="title">从“盯屏 6 小时”到“3 分钟最终审批”</text>
+  <text x="84" y="136" class="subtitle">不是让 agent 更会写代码，而是让工程师更快判断它值不值得信任</text>
+
+  <g filter="url(#shadow)">
+    <rect x="78" y="192" width="500" height="620" rx="32" fill="url(#leftCard)"/>
+    <text x="118" y="248" class="cardTitle">旧流程：agent 跑，人也得跟着盯</text>
+
+    <circle cx="136" cy="320" r="22" fill="#F97066"/>
+    <text x="128" y="328" class="step">1</text>
+    <text x="180" y="328" class="body">工程师写 prompt</text>
+
+    <circle cx="136" cy="404" r="22" fill="#F97066"/>
+    <text x="128" y="412" class="step">2</text>
+    <text x="180" y="412" class="body">agent 跑仿真和重构</text>
+
+    <circle cx="136" cy="488" r="22" fill="#F97066"/>
+    <text x="128" y="496" class="step">3</text>
+    <text x="180" y="496" class="body">工程师挨个看 8 个场景</text>
+
+    <circle cx="136" cy="572" r="22" fill="#F97066"/>
+    <text x="128" y="580" class="step">4</text>
+    <text x="180" y="580" class="body">人肉找偷换行为、删测试、改 baseline</text>
+
+    <circle cx="136" cy="656" r="22" fill="#F97066"/>
+    <text x="128" y="664" class="step">5</text>
+    <text x="180" y="664" class="body">返工重跑，再重新盯一遍</text>
+
+    <rect x="118" y="716" width="420" height="66" rx="18" fill="#FECACA"/>
+    <text x="154" y="759" class="metric">≈ 6h human watch</text>
+  </g>
+
+  <g opacity="0.95">
+    <path d="M620 504H816" stroke="#486581" stroke-width="8" stroke-linecap="round"/>
+    <path d="M774 456L842 504L774 552" stroke="#486581" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="642" y="406" width="158" height="62" rx="20" fill="#FEF3C7"/>
+    <text x="667" y="445" class="badge" fill="#92400E">-99% human time</text>
+    <rect x="648" y="548" width="146" height="54" rx="18" fill="#DBEAFE"/>
+    <text x="676" y="583" class="badge" fill="#1D4ED8">审查跟 ambiguity 线性相关</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="856" y="192" width="506" height="620" rx="32" fill="url(#rightCard)"/>
+    <text x="896" y="248" class="cardTitle">新流程：prompt → contract → run → 审批</text>
+
+    <rect x="896" y="292" width="118" height="52" rx="18" fill="#D9EAFB"/>
+    <text x="922" y="326" class="mono">prompt</text>
+    <path d="M1028 318H1072" stroke="#486581" stroke-width="4" stroke-linecap="round"/>
+    <rect x="1078" y="292" width="132" height="52" rx="18" fill="#E0FBF6"/>
+    <text x="1101" y="326" class="mono">contract</text>
+    <path d="M1224 318H1268" stroke="#486581" stroke-width="4" stroke-linecap="round"/>
+    <rect x="1274" y="292" width="84" height="52" rx="18" fill="#FEEBC8"/>
+    <text x="1298" y="326" class="mono">run</text>
+
+    <circle cx="922" cy="404" r="22" fill="#12B76A"/>
+    <text x="914" y="412" class="step">1</text>
+    <text x="966" y="412" class="body">contract 不 grounded，直接 fail-closed</text>
+
+    <circle cx="922" cy="488" r="22" fill="#12B76A"/>
+    <text x="914" y="496" class="step">2</text>
+    <text x="966" y="496" class="body">agent 无人值守跑 2–3 小时</text>
+
+    <circle cx="922" cy="572" r="22" fill="#12B76A"/>
+    <text x="914" y="580" class="step">3</text>
+    <text x="966" y="580" class="body">5 个 PASS 不上首屏，3 个 surfaced cases 上首屏</text>
+
+    <circle cx="922" cy="656" r="22" fill="#12B76A"/>
+    <text x="914" y="664" class="step">4</text>
+    <text x="966" y="664" class="body">工程师只看 AMBIGUOUS / FAIL / MIGRATION</text>
+
+    <rect x="896" y="716" width="426" height="66" rx="18" fill="#BBF7D0"/>
+    <text x="968" y="759" class="metric">≈ 3 min approval</text>
+  </g>
+</svg>

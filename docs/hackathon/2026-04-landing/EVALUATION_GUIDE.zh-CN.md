@@ -132,6 +132,12 @@ GitHub 上点对应 commit 看 diff：`https://github.com/MiaoDX/roboharness/com
   - 总 commit:    229 次
   - 自 0307:      127 次提交（一个多月）
 
+AI 参与度（commit 级，由 docs/hackathon/2026-04-landing/scripts/classify_commits.py 实测）:
+  - 当前 main 整体: 91.7% (210/229)
+  - 自 0307 至今:   92.9% (118/127)
+  - 0307 时同口径:  89.7% (96/107) — 不降反升
+  - 工作模式变化:  从 100% AI solo → 60.6% AI solo + 32.3% AI co-authored（人在 loop bless）
+
 CI:
   - GitHub Actions: lint + type + pytest（Python 3.10–3.13）
   - Cirun GPU smoke test (AWS Sydney)

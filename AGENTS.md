@@ -1,221 +1,108 @@
 # AGENTS.md
 
-This file defines the default operating playbook for coding agents working in this repository.
-Its scope is the entire repo tree rooted at this directory.
+Repo-wide operating instructions for coding agents. Scope: this entire repo.
 
-## Steering priority
+## First Read
 
-Before implementing broad changes, read `docs/steering/current.md` for the active milestone and non-goals.
+Before running commands, read:
 
-## 0) First-read policy (mandatory)
-
-Before running any command, read in this order:
-
-1. `AGENTS.md` (this file)
+1. `AGENTS.md`
 2. `CLAUDE.md`
-3. `pyproject.toml` sections:
+3. These `pyproject.toml` sections:
    - `[project.optional-dependencies]`
    - `[tool.pytest.ini_options]`
    - `[tool.coverage.run]`
 
-If instructions conflict, priority is:
+If instructions conflict, use this priority:
 **system/developer/user prompt > AGENTS.md > CLAUDE.md > inferred defaults**.
 
----
+Before broad changes, read `docs/steering/current.md`. Before resuming existing
+work, read `STATUS.md`. For architecture changes, read `ARCHITECTURE.md`. For
+public docs, examples, packaging, or Hugging Face Space changes, read the
+relevant `README.md` first. Prefer existing `Makefile` targets when they fit.
 
-## 0.1) Orientation and command selection
+## Skill Routing
 
-For architectural changes, also read `ARCHITECTURE.md`.
-For public docs, examples, packaging, or Hugging Face Space changes, read the
-relevant `README.md` files first.
-If a `Makefile` target exists for a task, prefer it over inventing a new command.
+When a request clearly matches an available skill, invoke that skill first.
 
----
-
-## 0.2) Skill routing (Codex + Claude)
-
-When the user's request clearly matches an available skill, invoke that skill as the
-first action instead of replying ad hoc or exploring with other tools first. This
-applies to Codex sessions as well as Claude sessions.
-
-Key routing rules:
-- Product ideas, "is this worth building", brainstorming -> `office-hours`
-- Bugs, errors, "why is this broken", 500 errors -> `investigate`
+- Product ideas, brainstorming, "worth building" -> `office-hours`
+- Bugs, errors, broken behavior, 500s -> `investigate`
 - Ship, deploy, push, create PR -> `ship`
-- QA, test the site, find bugs -> `qa`
-- Code review, check my diff -> `review`
-- Update docs after shipping -> `document-release`
+- QA or site testing -> `qa`
+- Code review or diff review -> `review`
+- Docs after shipping -> `document-release`
 - Weekly retro -> `retro`
-- Design system, brand -> `design-consultation`
-- Visual audit, design polish -> `design-review`
+- Design system or brand -> `design-consultation`
+- Visual polish or visual audit -> `design-review`
 - Architecture review -> `plan-eng-review`
 - Save progress, checkpoint, resume -> `checkpoint`
-- Code quality, health check -> `health`
+- Code quality dashboard -> `health`
+- Agent guidance refresh -> `$intuitive-init`
+- Human doc surface refresh -> `$intuitive-doc`
 
----
+## Environment And Checks
 
-## 0.3) Design artifact mirroring
+Do not run unit tests in a fresh environment before dependency preflight.
 
-When a design or planning skill writes artifacts outside the repo (for example under
-`~/.gstack/projects/...`), keep that external copy if the skill needs it for cross-session
-discovery, but also mirror the approved project-facing artifact into `docs/designs/` so the
-repository remains self-contained.
-
-For `/office-hours` outputs specifically:
-- mirror the approved design doc into `docs/designs/`
-- mirror any project-relevant sketch HTML into `docs/designs/` when available
-- do not treat `/tmp` files as the canonical project artifact
-
----
-
-## 0.4) Decision persistence for long reviews
-
-For multi-step design, review, or planning work, do not rely on chat context as the
-sole source of truth once decisions start getting locked in.
-
-- After each approved review block or major decision set, mirror the accepted
-  decisions into a repo-local artifact under `docs/designs/` or another task-appropriate
-  docs path.
-- Before starting implementation from a long interactive review, ensure the latest
-  approved decisions exist in a repo-local file and save a `/checkpoint`.
-- If context is getting long, the user asks about persistence/handoff, or a session
-  switch looks likely, save a `/checkpoint` proactively.
-- Treat `~/.gstack/projects/...` checkpoints as the handoff layer and repo-local
-  docs as the canonical project record for approved decisions.
-
----
-
-## 1) Environment preflight (mandatory before tests)
-
-Do not run UT immediately on a fresh environment.
-Always complete dependency preflight first.
-
-### 1.1 Preferred package manager: `uv`
-
-Use `uv` first when available:
-
-```bash
-uv --version
-```
-
-If available, install project + dev dependencies with one of:
-
-```bash
-uv sync --dev
-```
-
-If no lockfile/workspace setup is present, use:
+Use `uv` when available. Check with `uv --version`; prefer `uv sync --dev`. If
+no lockfile/workspace setup is present, use:
 
 ```bash
 uv pip install -e ".[dev]"
 ```
 
-### 1.2 Fallback when `uv` is unavailable
-
-Use pip:
+Fallback when `uv` is unavailable:
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-### 1.3 Fast sanity check before UT
-
-Because pytest coverage flags are configured in `pyproject.toml`, verify `pytest-cov` is usable before running full tests:
+Before full tests, verify coverage support:
 
 ```bash
 python -c "import pytest_cov; print('pytest-cov ok')"
 ```
 
-If this fails, install missing dev deps first (via `uv` preferred, pip fallback), then proceed.
-
-### 1.4 Optional extras by task
-
-Use optional extras by task:
-
-- `.[dev]` for normal development, tests, lint, and typing.
-- `.[demo]` for MuJoCo, Meshcat, Rerun, examples, or visual demo work.
-- `.[wbc]` for WBC / Pinocchio / Pink controller work.
-- `.[lerobot]` for LeRobot integration work.
-
-GPU or visual validation cannot be fully completed in CPU-only environments;
-report that limitation explicitly.
-
----
-
-## 2) Standard test workflow
-
-### 2.1 Full unit tests (default)
+Default validation:
 
 ```bash
 pytest -q
-```
-
-### 2.2 Focused debugging loop
-
-```bash
-pytest tests/<target_file>.py -k <pattern> -q
-```
-
-### 2.3 Optional no-cov local loop (only for faster debugging)
-
-```bash
-pytest --no-cov -q
-```
-
-Before finishing work, run full default UT (`pytest -q`) at least once.
-
----
-
-## 3) Lint/type checks for code changes
-
-Run when Python code changes are made:
-
-```bash
 ruff check .
 ruff format --check .
 mypy src/
 ```
 
-If a check cannot run because of environment limits, report the exact blocker.
+Run lint/type checks when Python code changes. Do not claim unit test success
+unless `pytest -q` ran in the current environment. Docs-only changes do not need
+the full Python gate unless they alter runnable examples or workflow commands.
 
----
+## Project Rules
 
-## 4) Operational best practices
+- Python target: 3.10+.
+- Public APIs should be typed.
+- New simulator backends implement `SimulatorBackend` structurally; no base
+  class inheritance is required.
+- Keep versions in `pyproject.toml` and `src/roboharness/__init__.py` in sync.
+- Optional extras: `dev` for tests/lint/type, `demo` for MuJoCo/Meshcat/Rerun,
+  `wbc` for Pinocchio/Pink controller work, `lerobot` for LeRobot integration.
+- MuJoCo headless validation needs `MUJOCO_GL=osmesa` or `MUJOCO_GL=egl`.
+- Isaac Lab end-to-end validation requires NVIDIA RTX hardware. CPU tests use
+  mocks for compatibility coverage.
+- GPU or visual validation may be impossible in CPU-only environments; report
+  that limitation explicitly.
 
-1. **Fail fast with clear diagnostics**: prefer explicit errors over silent fallbacks.
-2. **No hidden dependency assumptions**: always derive test requirements from `pyproject.toml`.
-3. **Reproducible command logs**: report exact commands and outcomes.
-4. **Small, verifiable steps**: install deps -> sanity check -> run UT.
-5. **No dependency drift in fixes**: avoid ad-hoc single-package installs unless doing triage; converge back to `.[dev]`.
+## Agent Runbooks
 
----
+Long agent-only procedures live under `docs/agents/`: release, CI debugging,
+testing, environments, GitHub workflow, and design/planning persistence.
 
-## 5) Quick command checklist (copy/paste)
+## Commit Hygiene
 
-```bash
-# 1) Read project testing/dependency config
-sed -n '1,220p' pyproject.toml
+Keep commits scoped and descriptive (`docs: ...`, `fix: ...`, `ci: ...`).
+When changing workflow/docs, ensure instructions match actual repo config.
 
-# 2) Install deps (uv preferred)
-uv --version && uv sync --dev || python -m pip install -e ".[dev]"
+Codex commits must include:
 
-# 3) Verify pytest-cov is available
-python -c "import pytest_cov; print('pytest-cov ok')"
-
-# 4) Run all unit tests
-pytest -q
+```text
+Co-authored-by: Codex <codex@users.noreply.github.com>
 ```
-
----
-
-## 6) Commit hygiene
-
-- Keep commits scoped and descriptive (`docs: ...`, `fix: ...`, etc.).
-- When changing workflow/docs, ensure instructions match actual repo configuration.
-- Do not claim UT success unless `pytest -q` has been run in the current environment.
-- If a commit is created by Codex, include the Git trailer
-  `Co-authored-by: Codex <codex@users.noreply.github.com>` in the commit message.
-- If a commit is created by another AI coding agent, include a corresponding
-  co-author trailer so agent usage can be tracked later.
-- If you maintain a dedicated bot/user account, prefer that account's verified
-  noreply email for the relevant agent trailer.

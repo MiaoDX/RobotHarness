@@ -28,6 +28,22 @@ _Avoid_: Trajectory recording, full video, checkpoint gallery
 A deterministic numeric or boolean condition that can accept or reject a run without visual interpretation. Hard metric gates provide the safety floor for visual judgment.
 _Avoid_: Heuristic, visual score, model opinion
 
+**Harness Contract**:
+The typed source of truth for a downstream project's review loop. It combines semantic phases, hard metric gates, visual review dimensions, evidence boundaries, and approval policy so generated artifacts remain grounded in one contract.
+_Avoid_: Prompt spec, loose review config, generated skill as contract
+
+**Harness Workflow**:
+A named review loop inside a **Harness Contract** for one target behavior or validation path. A project can have multiple harness workflows while keeping one project-level skill.
+_Avoid_: Separate skill per test case, mixed workflow policy, unnamed review path
+
+**Contract Policy**:
+The part of a **Harness Contract** that defines review authority, evidence boundaries, validation commands, and escalation rules around existing phase and metric primitives.
+_Avoid_: Hidden generator defaults, demo-specific policy, policy in prose only
+
+**Contract Snapshot**:
+A versioned, normalized serialization of a **Harness Contract** used for drift checks, generated artifacts, and auditability. It reflects the contract source but does not replace the Python-authored source.
+_Avoid_: Primary contract config, unversioned generated JSON, editable generated contract
+
 **Metric-First Review**:
 The review strategy that uses hard metric gates wherever reliable metrics are available and reserves agent visual review for necessary judgments that are hard to metricize.
 _Avoid_: Visual-first review, model-as-default-evaluator
@@ -47,6 +63,62 @@ _Avoid_: Manual review, human in the loop
 **Baseline Blessing**:
 Human approval that makes a proposed new baseline authoritative for future comparisons.
 _Avoid_: Auto-update, replace baseline, approve screenshot
+
+**Generated Project Skill**:
+An agent-facing instruction artifact produced for a downstream project from its **Harness Contract**. The generated skill is not the source of truth; it reflects the project's typed harness contract.
+_Avoid_: Handwritten repo prompt, static skill copy, prompt as source of truth
+
+**Deterministic Skill Compilation**:
+The generation of skill files from a **Harness Contract** through stable templates rather than model-written prose. It makes drift checks meaningful and keeps contract changes reviewable.
+_Avoid_: LLM-regenerated skill text, wording churn, non-reproducible prompt output
+
+**Skill Drift Check**:
+A validation step that recompiles a **Project Harness Skill** from its **Skill Contract Source** and fails when committed generated artifacts differ. It proves generated instructions and snapshots still reflect the reviewed contract.
+_Avoid_: Manual prompt sync, stale skill artifact, best-effort regeneration
+
+**Runnable Harness Stub**:
+A minimal generated script or example that exercises a **Skill Contract Source** against the downstream project's code. It exists to make the contract runnable for humans, CI, and coding agents, but it is not a second source of truth.
+_Avoid_: Second framework, hidden demo harness, generated contract logic
+
+**Project Harness Skill**:
+A project-named **Generated Project Skill** that teaches agents how to use roboharness for one downstream repository's phases, metrics, evidence boundaries, and review policy. It is distinct from the roboharness repository's own self-bootstrapping skill.
+_Avoid_: Generic roboharness skill, whole-project agent manual, copied upstream skill
+
+**Skill Contract Source**:
+The reviewed Python contract file kept inside a **Project Harness Skill** folder. It is the authoritative source for that skill's generated instructions, normalized contract snapshot, schemas, and examples.
+_Avoid_: Generated contract as source, root-only setup file, scattered harness config
+
+**Trusted Contract Load**:
+The repo-local act of importing a **Skill Contract Source** to render or check generated artifacts. It is trusted in the same way as running that repository's tests or build scripts.
+_Avoid_: Untrusted contract execution, sandboxed prompt parsing, remote skill rendering
+
+**Contract Discovery Mode**:
+The authoring mode of a **Project Harness Skill** where a coding agent reads the downstream repository, discusses target and scope with the user, and drafts an explicit **Harness Contract** for review. It may propose phases, metrics, evidence boundaries, and escalation rules, but it does not silently make them authoritative.
+_Avoid_: Magic contract inference, unattended criteria invention, repo scan as approval
+
+**Harness Scope Brief**:
+A concise, agent-drafted proposal for a downstream project's target workflow, semantic phases, hard metric gates, visual review dimensions, evidence roots, baseline policy, human escalation boundary, and validation command. The user corrects or approves this brief before it becomes a **Harness Contract**.
+_Avoid_: Blank setup form, hidden inference, contract without scope approval
+
+**Contract Use Mode**:
+The operating mode of a **Project Harness Skill** where a coding agent follows an existing **Harness Contract** to run checks, prepare proof packs, invoke bounded visual review, and interpret approval results.
+_Avoid_: Re-authoring criteria during review, ad hoc proof-pack browsing, free-form visual judgment
+
+**Contract Improvement Mode**:
+The maintenance mode of a **Project Harness Skill** where a coding agent proposes scoped changes to an existing **Skill Contract Source** after re-reading the repository and drafting a **Harness Scope Brief** delta. It extends the contract only after user approval.
+_Avoid_: Silent contract drift, direct generated-file edits, ad hoc scope expansion
+
+**Out-of-Scope Harness Request**:
+A validation request that is not covered by any existing **Harness Workflow**. It must route through **Contract Improvement Mode** before the agent treats it as an approved review path.
+_Avoid_: One-off visual judgment, improvised metric gates, temporary untracked workflow
+
+**Python-Authored Contract**:
+A **Harness Contract** declared in Python so downstream projects can reuse their local phase objects, metric gates, review policies, and simulator conventions directly. Serialized contract files are normalized outputs, not the primary authoring surface.
+_Avoid_: YAML-first contract, prompt-only contract, generated JSON as source
+
+**Self-Bootstrapping Contract**:
+A roboharness-owned **Harness Contract** that generates this repository's own agent-facing skill artifacts. It makes the repository prove the contract-to-skill workflow on itself and supports drift checks between generated and committed artifacts.
+_Avoid_: Magical self-discovery, docs-only dogfooding, unreviewed generated prompt
 
 ## Flagged Ambiguities
 
